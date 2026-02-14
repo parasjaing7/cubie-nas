@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block title %}Storage{% endblock %}
+
+{% block content %}
+<div class="panel">
+  <div class="panel-head">
+    <h3>Connected Drives</h3>
+    <button onclick="loadStoragePage()">Refresh</button>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Device</th>
+        <th>Filesystem</th>
+        <th>Mount Point</th>
+        <th>Used</th>
+        <th>Free</th>
+        <th>SMART</th>
+      </tr>
+    </thead>
+    <tbody id="storage-body"></tbody>
+  </table>
+</div>
+{% endblock %}

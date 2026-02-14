@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+
+{% block title %}NAS Management{% endblock %}
+
+{% block content %}
+<div class="cards-grid">
+  <article class="card">
+    <h3>SMB / Samba Service</h3>
+    <div class="kv"><span>Service</span><strong>samba (smbd)</strong></div>
+    <div class="kv"><span>Enabled at boot</span><strong id="smb-enabled">-</strong></div>
+    <div class="kv"><span>Current status</span><strong id="smb-active">-</strong></div>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.9rem;">
+      <button type="button" onclick="smbAction('enable')">Enable</button>
+      <button type="button" onclick="smbAction('disable')">Disable</button>
+      <button type="button" onclick="smbAction('start')">Start</button>
+      <button type="button" onclick="smbAction('stop')">Stop</button>
+      <button type="button" onclick="smbAction('restart')">Restart</button>
+      <button type="button" onclick="loadNasPage()">Refresh</button>
+    </div>
+    <p id="smb-msg" class="muted"></p>
+  </article>
+
+  <article class="card">
+    <h3>USB Drive to SMB Share</h3>
+    <div class="panel-head">
+      <p class="muted" style="margin:0;">Detect USB storage and publish over SMB for LAN devices.</p>
+      <button type="button" onclick="loadUsbDevices()">Scan USB</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Device</th>
+          <th>Model</th>
+          <th>FS</th>
+          <th>Size</th>
+          <th>Mounted</th>
+        </tr>
+      </thead>
+      <tbody id="usb-body"></tbody>
+    </table>
+
+    <form id="usb-share-form" style="margin-top:1rem;">
+      <label>USB Device</label>
+      <select id="usb-device" required></select>
+
+      <label>SMB Share Name</label>
+      <input id="usb-share-name" placeholder="usbshare" required />
+
+      <label>Mountpoint (optional)</label>
+      <input id="usb-mountpoint" placeholder="/srv/nas/usbshare" />
+
+      <label><input id="usb-format" type="checkbox" /> Format before mount</label>
+
+      <label>Filesystem (used only when format enabled)</label>
+      <select id="usb-fstype">
+        <option value="ext4">ext4</option>
+        <option value="xfs">xfs</option>
+        <option value="exfat">exfat</option>
+        <option value="ntfs">ntfs</option>
+        <option value="vfat">vfat</option>
+      </select>
+
+      <button type="submit">Mount and Publish SMB Share</button>
+    </form>
+    <p id="usb-msg" class="muted"></p>
+  </article>
+</div>
+{% endblock %}

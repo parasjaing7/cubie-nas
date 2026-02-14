@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cubie NAS Login</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body class="login-body">
+  <main class="login-card">
+    <h1>Cubie NAS</h1>
+    <p>Default admin login: <code>admin / admin12345</code></p>
+    <form id="login-form">
+      <label>Username</label>
+      <input type="text" name="username" required />
+      <label>Password</label>
+      <input type="password" name="password" required />
+      <button type="submit">Sign In</button>
+      <p id="login-error" class="error"></p>
+    </form>
+  </main>
+  <script>
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ username: fd.get('username'), password: fd.get('password') })
+      });
+      if (res.ok) {
+        location.href = '/dashboard';
+      } else {
+        const data = await res.json();
+        document.getElementById('login-error').textContent = data.detail || 'Login failed';
+      }
+    });
+  </script>
+</body>
+</html>

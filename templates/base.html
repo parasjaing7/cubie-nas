@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cubie NAS</title>
+  <link rel="stylesheet" href="/static/css/router.css" />
+</head>
+<body data-page="{{ page }}">
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="badge">NAS</div>
+        <div>
+          <h1>Cubie NAS</h1>
+          <p>Device Management</p>
+        </div>
+      </div>
+      <nav>
+        <a href="/general" class="nav-link {% if page == 'general' %}active{% endif %}">General Info</a>
+        <a href="/storage" class="nav-link {% if page == 'storage' %}active{% endif %}">Storage</a>
+        <a href="/network" class="nav-link {% if page == 'network' %}active{% endif %}">Network Settings</a>
+        <a href="/nas" class="nav-link {% if page == 'nas' %}active{% endif %}">NAS Management</a>
+      </nav>
+      <div class="side-actions">
+        <button id="theme-toggle" class="ghost-btn">Theme</button>
+        <button id="logout-btn" class="danger-btn">Logout</button>
+      </div>
+    </aside>
+    <section class="content">
+      <header class="topbar">
+        <h2>{% block title %}Dashboard{% endblock %}</h2>
+        <p id="top-status">Connected</p>
+      </header>
+      <main>
+        {% block content %}{% endblock %}
+      </main>
+    </section>
+  </div>
+  <script src="/static/js/router.js"></script>
+</body>
+</html>

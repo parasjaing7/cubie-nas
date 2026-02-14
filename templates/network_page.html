@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block title %}Network Settings{% endblock %}
+
+{% block content %}
+<div class="cards-grid">
+  <article class="card">
+    <h3>Current Network</h3>
+    <div class="kv"><span>Interface</span><strong id="n-current-iface">-</strong></div>
+    <div class="kv"><span>Current IP</span><strong id="n-current-ip">-</strong></div>
+    <div class="kv"><span>Gateway</span><strong id="n-current-gw">-</strong></div>
+    <div class="kv"><span>DNS</span><strong id="n-current-dns">-</strong></div>
+  </article>
+
+  <article class="card">
+    <h3>Edit Settings</h3>
+    <form id="network-form">
+      <label>Interface</label>
+      <input id="n-iface" required />
+
+      <label>Mode</label>
+      <select id="n-mode">
+        <option value="dhcp">DHCP</option>
+        <option value="static">Static</option>
+      </select>
+
+      <label>IP Address (CIDR)</label>
+      <input id="n-address" placeholder="192.168.1.50/24" />
+
+      <label>Gateway</label>
+      <input id="n-gateway" placeholder="192.168.1.1" />
+
+      <label>DNS (comma separated)</label>
+      <input id="n-dns" placeholder="1.1.1.1,8.8.8.8" />
+
+      <button type="submit">Save Network Settings</button>
+      <p id="network-msg" class="muted"></p>
+    </form>
+  </article>
+</div>
+{% endblock %}

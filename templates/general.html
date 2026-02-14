@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+
+{% block title %}General Info{% endblock %}
+
+{% block content %}
+<div class="cards-grid">
+  <article class="card">
+    <h3>Device</h3>
+    <div class="kv"><span>Model</span><strong id="g-model">-</strong></div>
+    <div class="kv"><span>Hostname</span><strong id="g-hostname">-</strong></div>
+    <div class="kv"><span>OS</span><strong id="g-os">-</strong></div>
+    <div class="kv"><span>Architecture</span><strong id="g-arch">-</strong></div>
+  </article>
+
+  <article class="card">
+    <h3>Compute</h3>
+    <div class="kv"><span>CPU Model</span><strong id="g-cpu-model">-</strong></div>
+    <div class="kv"><span>CPU Cores</span><strong id="g-cpu-cores">-</strong></div>
+    <div class="kv"><span>RAM Total</span><strong id="g-ram-total">-</strong></div>
+    <div class="kv"><span>Temperature</span><strong id="g-temp">-</strong></div>
+  </article>
+
+  <article class="card">
+    <h3>Live Status</h3>
+    <div class="kv"><span>CPU Usage</span><strong id="live-cpu">-</strong></div>
+    <div class="kv"><span>RAM Usage</span><strong id="live-ram">-</strong></div>
+    <div class="kv"><span>Network RX</span><strong id="live-rx">-</strong></div>
+    <div class="kv"><span>Network TX</span><strong id="live-tx">-</strong></div>
+    <div class="kv"><span>Uptime</span><strong id="live-up">-</strong></div>
+  </article>
+</div>
+{% endblock %}

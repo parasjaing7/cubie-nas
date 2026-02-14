@@ -1,0 +1,98 @@
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Optional
+
+from pydantic import BaseModel, Field
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = 'bearer'
+
+
+class UserCreate(BaseModel):
+    username: str = Field(min_length=2, max_length=32)
+    password: str = Field(min_length=8, max_length=128)
+    role: str = Field(default='user', pattern='^(admin|user)$')
+
+
+class UserOut(BaseModel):
+    id: int
+    username: str
+    role: str
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PasswordChangeRequest(BaseModel):
+    username: str
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class ServiceActionRequest(BaseModel):
+    service: str
+
+
+class DriveFormatRequest(BaseModel):
+    device: str
+    fs_type: str = Field(pattern='^(ext4|xfs|vfat|exfat|ntfs)$')
+    confirmation: str
+
+
+class MountRequest(BaseModel):
+    device: str
+    mountpoint: str
+
+
+class FileActionRequest(BaseModel):
+    path: str
+    new_name: Optional[str] = None
+
+
+class MkdirRequest(BaseModel):
+    path: str
+    name: str
+
+
+class DriveInfo(BaseModel):
+    name: str
+    device: str
+    fstype: Optional[str]
+    size: Optional[str]
+    mountpoint: Optional[str]
+    used_bytes: Optional[int]
+    free_bytes: Optional[int]
+    model: Optional[str]
+    transport: Optional[str]
+    smart_status: Optional[str] = None
+
+
+class ApiResponse(BaseModel):
+    ok: bool
+    message: str
+    data: Optional[Any] = None
+
+
+class NetworkConfigRequest(BaseModel):
+    interface: str = Field(min_length=2, max_length=32)
+    mode: str = Field(pattern='^(dhcp|static)$')
+    address: Optional[str] = None
+    gateway: Optional[str] = None
+    dns: Optional[str] = None
+
+
+class UsbShareRequest(BaseModel):
+    device: str
+    share_name: str = Field(min_length=2, max_length=64, pattern=r'^[A-Za-z0-9_-]+$')
+    mountpoint: Optional[str] = None
+    format_before_mount: bool = False
+    fs_type: Optional[str] = Field(default=None, pattern='^(ext4|xfs|vfat|exfat|ntfs)$')
