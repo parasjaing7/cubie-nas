@@ -44,7 +44,7 @@ class ServiceActionRequest(BaseModel):
 
 class DriveFormatRequest(BaseModel):
     device: str
-    fs_type: str = Field(pattern='^(ext4|xfs|vfat|exfat|ntfs)$')
+    fs_type: str = Field(pattern='^(ext4)$')
     confirmation: str
 
 
@@ -95,4 +95,4 @@ class UsbShareRequest(BaseModel):
     share_name: str = Field(min_length=2, max_length=64, pattern=r'^[A-Za-z0-9_-]+$')
     mountpoint: Optional[str] = None
     format_before_mount: bool = False
-    fs_type: Optional[str] = Field(default=None, pattern='^(ext4|xfs|vfat|exfat|ntfs)$')
+    fs_type: Optional[str] = Field(default=None, pattern='^(ext4)$')

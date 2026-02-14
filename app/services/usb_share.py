@@ -4,18 +4,14 @@ import re
 from pathlib import Path
 from typing import Optional
 
+from ..config import settings
 from .system_cmd import run_cmd
 
 
 def _mkfs_cmd(device: str, fs_type: str) -> list[str]:
-    mapping = {
-        'ext4': ['mkfs.ext4', '-F', device],
-        'xfs': ['mkfs.xfs', '-f', device],
-        'vfat': ['mkfs.vfat', device],
-        'exfat': ['mkfs.exfat', device],
-        'ntfs': ['mkfs.ntfs', '-F', device],
-    }
-    return mapping[fs_type]
+    if fs_type != 'ext4':
+        raise ValueError('Only ext4 is supported for NAS usage')
+    return ['mkfs.ext4', '-F', device]
 
 
 async def _fstype_for_device(device: str) -> Optional[str]:
@@ -61,7 +57,7 @@ def _upsert_fstab(device_ref: str, mountpoint: str, fs_type: str):
     fstab.write_text('\n'.join(new_lines).rstrip() + '\n')
 
 
-def _upsert_samba_share(share_name: str, mountpoint: str):
+def _upsert_samba_share(share_name: str, mountpoint: str, nas_user: str):
     smb = Path('/etc/samba/smb.conf')
     if not smb.exists():
         raise RuntimeError('/etc/samba/smb.conf not found')
@@ -74,10 +70,11 @@ def _upsert_samba_share(share_name: str, mountpoint: str):
         f'[{share_name}]',
         f'   path = {mountpoint}',
         '   browseable = yes',
+        '   writable = yes',
         '   read only = no',
-        '   guest ok = yes',
-        '   force user = nobody',
-        '   create mask = 0664',
+        f'   valid users = {nas_user}',
+        f'   force user = {nas_user}',
+        '   create mask = 0775',
         '   directory mask = 0775',
         end,
     ]
@@ -120,8 +117,11 @@ async def provision_usb_share(
     if not target_mount.startswith('/srv/nas/'):
         return False, 'Mountpoint must be under /srv/nas', {}
 
-    if format_before_mount and not fs_type:
-        return False, 'fs_type is required when format_before_mount=true', {}
+    if fs_type and fs_type != 'ext4':
+        return False, 'Only EXT4 formatted drives are supported for NAS usage.', {}
+
+    if format_before_mount and (fs_type or 'ext4') != 'ext4':
+        return False, 'Only EXT4 formatted drives are supported for NAS usage.', {}
 
     rc, out, _ = await run_cmd(['lsblk', '-no', 'TRAN', device])
     transport = out.strip().lower() if rc == 0 else ''
@@ -135,29 +135,42 @@ async def provision_usb_share(
             return False, err_u or out_u or 'Failed to unmount device', {'is_usb': is_usb}
 
     if format_before_mount:
-        rc_f, out_f, err_f = await run_cmd(_mkfs_cmd(device, fs_type or 'ext4'))
+        try:
+            cmd = _mkfs_cmd(device, fs_type or 'ext4')
+        except ValueError as exc:
+            return False, str(exc), {'is_usb': is_usb}
+        rc_f, out_f, err_f = await run_cmd(cmd)
         if rc_f != 0:
             return False, err_f or out_f or 'Format failed', {'is_usb': is_usb}
 
     detected_fs = await _fstype_for_device(device)
-    if not detected_fs:
-        return False, 'Could not detect filesystem. Format first or use supported filesystem.', {'is_usb': is_usb}
+    if detected_fs != 'ext4':
+        return False, 'Only EXT4 formatted drives are supported for NAS usage.', {'is_usb': is_usb, 'filesystem': detected_fs}
 
     Path(target_mount).mkdir(parents=True, exist_ok=True)
 
-    rc_m, out_m, err_m = await run_cmd(['mount', device, target_mount])
+    uuid = await _uuid_for_device(device)
+    mount_ref = f'UUID={uuid}' if uuid else device
+
+    rc_m, out_m, err_m = await run_cmd(['mount', '-t', 'ext4', mount_ref, target_mount])
     if rc_m != 0:
         return False, err_m or out_m or 'Mount failed', {'is_usb': is_usb}
 
-    rc_c, out_c, err_c = await run_cmd(['chmod', '0777', target_mount])
-    if rc_c != 0:
-        return False, err_c or out_c or 'Permission update failed', {'is_usb': is_usb}
+    nas_user = settings.nas_owner_user
+    rc_chown, out_chown, err_chown = await run_cmd(['chown', '-R', f'{nas_user}:{nas_user}', target_mount])
+    if rc_chown != 0:
+        await run_cmd(['umount', target_mount])
+        return False, err_chown or out_chown or 'Ownership update failed', {'is_usb': is_usb}
 
-    uuid = await _uuid_for_device(device)
+    rc_chmod, out_chmod, err_chmod = await run_cmd(['chmod', '-R', '0775', target_mount])
+    if rc_chmod != 0:
+        await run_cmd(['umount', target_mount])
+        return False, err_chmod or out_chmod or 'Permission update failed', {'is_usb': is_usb}
+
     device_ref = f'UUID={uuid}' if uuid else device
-    _upsert_fstab(device_ref, target_mount, detected_fs)
+    _upsert_fstab(device_ref, target_mount, 'ext4')
 
-    _upsert_samba_share(name, target_mount)
+    _upsert_samba_share(name, target_mount, nas_user)
 
     rc_t, out_t, err_t = await run_cmd(['testparm', '-s'])
     if rc_t != 0:
@@ -178,7 +191,8 @@ async def provision_usb_share(
             'share_name': name,
             'mountpoint': target_mount,
             'device': device,
-            'filesystem': detected_fs,
+            'filesystem': 'ext4',
             'is_usb': is_usb,
+            'nas_user': nas_user,
         },
     )
