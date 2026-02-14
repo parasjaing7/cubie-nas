@@ -6,7 +6,7 @@ from ..deps import enforce_csrf, get_current_user, require_admin
 from ..schemas import ApiResponse, DriveFormatRequest, MountRequest, UsbShareRequest
 from ..services.storage import list_drives, smart_status
 from ..services.system_cmd import run_cmd
-from ..services.usb_share import provision_usb_share
+from ..services.usb_share import provision_nvme_share, provision_usb_share
 
 router = APIRouter(prefix='/api/storage', tags=['storage'])
 
@@ -58,6 +58,24 @@ async def provision_usb_as_smb(payload: UsbShareRequest, _=Depends(require_admin
         mountpoint=payload.mountpoint,
         format_before_mount=payload.format_before_mount,
         fs_type=payload.fs_type,
+        wipe_repartition=payload.wipe_repartition,
+        wipe_confirmation=payload.wipe_confirmation,
+    )
+    if not ok:
+        raise HTTPException(status_code=400, detail=message)
+    return ApiResponse(ok=True, message=message, data=data)
+
+
+@router.post('/nvme/provision-smb', dependencies=[Depends(enforce_csrf)])
+async def provision_nvme_as_smb(payload: UsbShareRequest, _=Depends(require_admin)):
+    ok, message, data = await provision_nvme_share(
+        device=payload.device,
+        share_name=payload.share_name,
+        mountpoint=payload.mountpoint,
+        format_before_mount=payload.format_before_mount,
+        fs_type=payload.fs_type,
+        wipe_repartition=payload.wipe_repartition,
+        wipe_confirmation=payload.wipe_confirmation,
     )
     if not ok:
         raise HTTPException(status_code=400, detail=message)

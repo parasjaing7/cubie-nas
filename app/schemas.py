@@ -95,4 +95,6 @@ class UsbShareRequest(BaseModel):
     share_name: str = Field(min_length=2, max_length=64, pattern=r'^[A-Za-z0-9_-]+$')
     mountpoint: Optional[str] = None
     format_before_mount: bool = False
-    fs_type: Optional[str] = Field(default=None, pattern='^(ext4)$')
+    fs_type: Optional[str] = Field(default=None, pattern='^(ext4|exfat)$')
+    wipe_repartition: bool = False
+    wipe_confirmation: Optional[str] = None

@@ -49,16 +49,79 @@
       <label>Mountpoint (optional)</label>
       <input id="usb-mountpoint" placeholder="/srv/nas/usbshare" />
 
-      <label><input id="usb-format" type="checkbox" /> Format before mount (EXT4 only)</label>
+      <label><input id="usb-format" type="checkbox" /> Format before mount (ext4/exfat)</label>
 
       <label>Filesystem</label>
-      <select id="usb-fstype" disabled>
-        <option value="ext4">ext4 (required)</option>
+      <select id="usb-fstype">
+        <option value="ext4">ext4</option>
+        <option value="exfat">exfat</option>
       </select>
+
+      <label><input id="usb-wipe" type="checkbox" /> Wipe disk and recreate one partition (destructive)</label>
+      <div id="usb-wipe-confirm-wrap" style="display:none;">
+        <label>Type confirmation text exactly</label>
+        <input id="usb-wipe-confirm" placeholder="WIPE /dev/sdX" />
+      </div>
 
       <button type="submit">Mount and Publish SMB Share</button>
     </form>
     <p id="usb-msg" class="muted"></p>
+  </article>
+
+  <article class="card">
+    <h3>NVMe Drive to SMB Share</h3>
+    <div class="panel-head">
+      <p class="muted" style="margin:0;">Detect NVMe storage and publish over SMB for LAN devices (recommended: choose NVMe partition like /dev/nvme0n1p2).</p>
+      <button type="button" onclick="loadNvmeDevices()">Scan NVMe</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Device</th>
+          <th>Model</th>
+          <th>FS</th>
+          <th>Size</th>
+          <th>Mounted</th>
+        </tr>
+      </thead>
+      <tbody id="nvme-body"></tbody>
+    </table>
+
+    <form id="nvme-share-form" style="margin-top:1rem;">
+      <label>NVMe Device</label>
+      <select id="nvme-device" required></select>
+
+      <label>SMB Share Name</label>
+      <input id="nvme-share-name" placeholder="nvmeshare" required />
+
+      <label>Mountpoint (optional)</label>
+      <input id="nvme-mountpoint" placeholder="/srv/nas/nvmeshare" />
+
+      <label><input id="nvme-format" type="checkbox" /> Format before mount (ext4/exfat)</label>
+
+      <label>Filesystem</label>
+      <select id="nvme-fstype">
+        <option value="ext4">ext4</option>
+        <option value="exfat">exfat</option>
+      </select>
+
+      <label><input id="nvme-wipe" type="checkbox" /> Wipe disk and recreate one partition (destructive)</label>
+      <div id="nvme-wipe-confirm-wrap" style="display:none;">
+        <label>Type confirmation text exactly</label>
+        <input id="nvme-wipe-confirm" placeholder="WIPE /dev/nvme0n1" />
+      </div>
+
+      <button type="submit">Mount and Publish SMB Share</button>
+    </form>
+    <p id="nvme-msg" class="muted"></p>
+  </article>
+
+  <article class="card">
+    <h3>Provisioning Status</h3>
+    <div class="kv"><span>Operation</span><strong id="provision-op">Idle</strong></div>
+    <div class="kv"><span>Elapsed</span><strong id="provision-elapsed">0s</strong></div>
+    <p id="provision-summary" class="muted">No operation running.</p>
+    <ol id="provision-steps" style="margin:0;padding-left:1.2rem;"></ol>
   </article>
 </div>
 {% endblock %}
