@@ -70,3 +70,70 @@ async def test_concurrency_lock_rejects_parallel_request(mapped_paths):
 
     assert ok is False
     assert "already in progress" in message
+
+
+def test_filesystem_provision_lock_is_exclusive(monkeypatch, tmp_path):
+    lock_path = tmp_path / "provision.lock"
+    monkeypatch.setattr(usb_share, "_PROVISION_FILE_LOCK_PATH", lock_path)
+
+    first_fd = usb_share._acquire_provision_file_lock()
+    assert first_fd is not None
+
+    try:
+        second_fd = usb_share._acquire_provision_file_lock()
+        assert second_fd is None
+    finally:
+        usb_share._release_provision_file_lock(first_fd)
+
+    third_fd = usb_share._acquire_provision_file_lock()
+    assert third_fd is not None
+    usb_share._release_provision_file_lock(third_fd)
+
+
+@pytest.mark.asyncio
+async def test_filesystem_lock_failure_rejects_request(mapped_paths, monkeypatch):
+    runner = MockCommandRunner()
+
+    monkeypatch.setattr(usb_share, "_acquire_provision_file_lock", lambda: None)
+
+    ok, message, _ = await usb_share.provision_usb_share(
+        device="/dev/sdb1",
+        share_name="testshare",
+        mountpoint="/srv/nas/testshare",
+        format_before_mount=False,
+        fs_type=None,
+        runner=runner,
+    )
+
+    assert ok is False
+    assert "already in progress" in message
+    assert runner.calls == []
+
+
+@pytest.mark.asyncio
+async def test_filesystem_lock_released_after_attempt(mapped_paths, monkeypatch):
+    released = {"value": False}
+
+    monkeypatch.setattr(usb_share, "_acquire_provision_file_lock", lambda: 123)
+
+    def _release(fd: int):
+        assert fd == 123
+        released["value"] = True
+
+    async def _fake_impl(**kwargs):
+        return True, "ok", {}
+
+    monkeypatch.setattr(usb_share, "_release_provision_file_lock", _release)
+    monkeypatch.setattr(usb_share, "_provision_block_share_impl", _fake_impl)
+
+    ok, _, _ = await usb_share.provision_usb_share(
+        device="/dev/sdb1",
+        share_name="testshare",
+        mountpoint="/srv/nas/testshare",
+        format_before_mount=False,
+        fs_type=None,
+        runner=MockCommandRunner(),
+    )
+
+    assert ok is True
+    assert released["value"] is True

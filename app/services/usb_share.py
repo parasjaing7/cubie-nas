@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import fcntl
 import os
 import re
 import shlex
+import stat
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -14,6 +16,36 @@ from .transaction import TransactionRunner, TransactionStep
 
 SUPPORTED_FS = {'ext4', 'exfat'}
 _PROVISION_LOCK = asyncio.Lock()
+_PROVISION_FILE_LOCK_PATH = Path('/var/lib/cubie-nas/provision.lock')
+_PROVISION_FILE_LOCK_FALLBACK_PATH = Path('/tmp/cubie-nas/provision.lock')
+
+
+def _acquire_file_lock(path: Path) -> Optional[int]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(str(path), os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return fd
+    except BlockingIOError:
+        os.close(fd)
+        return None
+    except Exception:
+        os.close(fd)
+        raise
+
+
+def _acquire_provision_file_lock() -> Optional[int]:
+    try:
+        return _acquire_file_lock(_PROVISION_FILE_LOCK_PATH)
+    except PermissionError:
+        return _acquire_file_lock(_PROVISION_FILE_LOCK_FALLBACK_PATH)
+
+
+def _release_provision_file_lock(fd: int) -> None:
+    try:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
 
 
 def _mkfs_cmd(device: str, fs_type: str) -> list[str]:
@@ -279,6 +311,7 @@ def _atomic_write_text(path: Path, content: str) -> None:
 
 def _atomic_copy_file(source: Path, target: Path) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
+    source_mode = stat.S_IMODE(source.stat().st_mode)
     fd, tmp_path = tempfile.mkstemp(prefix=f'.{target.name}.', suffix='.tmp', dir=str(target.parent))
     try:
         with source.open('rb') as src, os.fdopen(fd, 'wb') as dst:
@@ -287,6 +320,7 @@ def _atomic_copy_file(source: Path, target: Path) -> None:
                 if not chunk:
                     break
                 dst.write(chunk)
+            os.fchmod(dst.fileno(), source_mode)
             dst.flush()
             os.fsync(dst.fileno())
         os.replace(tmp_path, target)
@@ -402,18 +436,25 @@ async def provision_block_share(
         return False, 'Another provisioning operation is already in progress', {}
 
     async with _PROVISION_LOCK:
-        return await _provision_block_share_impl(
-            device=device,
-            share_name=share_name,
-            mountpoint=mountpoint,
-            format_before_mount=format_before_mount,
-            fs_type=fs_type,
-            expected_transport=expected_transport,
-            label=label,
-            wipe_repartition=wipe_repartition,
-            wipe_confirmation=wipe_confirmation,
-            runner=runner,
-        )
+        lock_fd = _acquire_provision_file_lock()
+        if lock_fd is None:
+            return False, 'Another provisioning operation is already in progress', {}
+
+        try:
+            return await _provision_block_share_impl(
+                device=device,
+                share_name=share_name,
+                mountpoint=mountpoint,
+                format_before_mount=format_before_mount,
+                fs_type=fs_type,
+                expected_transport=expected_transport,
+                label=label,
+                wipe_repartition=wipe_repartition,
+                wipe_confirmation=wipe_confirmation,
+                runner=runner,
+            )
+        finally:
+            _release_provision_file_lock(lock_fd)
 
 
 async def _provision_block_share_impl(

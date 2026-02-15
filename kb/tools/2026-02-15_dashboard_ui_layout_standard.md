@@ -166,3 +166,15 @@ curl -sS -i --cookie "access_token=fake" http://127.0.0.1:8899/dashboard | head 
 - `static/css/router.css`
 - `static/js/app.js`
 - `kb/TEMPLATE.md`
+
+---
+
+### Update 2026-02-15
+
+- Split dashboard features into dedicated navigation pages to match router-admin IA:
+	- `dashboard` now contains only **User Management**.
+	- Added `/files` page for **File Manager**.
+	- Added `/services` page for **Services**.
+	- Storage remains under `/storage` as connected drives panel.
+- Updated sidebar navigation in `templates/base.html` to include File Manager and Services tabs.
+- Moved File Manager/Services/User action handlers into `static/js/router.js` and initialized by `data-page` to avoid cross-page script coupling.

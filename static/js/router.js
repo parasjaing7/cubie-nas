@@ -224,6 +224,204 @@ async function loadStoragePage() {
   });
 }
 
+async function loadOverviewPage() {
+  try {
+    const [generalRes, storageRes, servicesRes, networkRes] = await Promise.all([
+      api('/api/system/general-info'),
+      api('/api/storage/drives'),
+      api('/api/services/list'),
+      api('/api/network/current').catch(() => ({ data: {} })),
+    ]);
+
+    const general = generalRes.data || {};
+    const drives = storageRes.data || [];
+    const services = servicesRes.data || [];
+    const network = networkRes.data || {};
+
+    const drivesMounted = drives.filter((d) => !!d.mountpoint).length;
+    const drivesUsb = drives.filter((d) => d.is_usb || d.transport === 'usb').length;
+    const drivesNvme = drives.filter((d) => (d.transport || '').toLowerCase() === 'nvme').length;
+
+    document.getElementById('ov-iface').textContent = network.interface || '-';
+    document.getElementById('ov-ip').textContent = network.ip_address || '-';
+    document.getElementById('ov-gw').textContent = network.gateway || '-';
+    document.getElementById('ov-dns').textContent = network.dns || '-';
+
+    document.getElementById('ov-drives-total').textContent = String(drives.length);
+    document.getElementById('ov-drives-mounted').textContent = String(drivesMounted);
+    document.getElementById('ov-drives-usb').textContent = String(drivesUsb);
+    document.getElementById('ov-drives-nvme').textContent = String(drivesNvme);
+
+    const servicesBody = document.getElementById('ov-services-body');
+    servicesBody.innerHTML = '';
+    services.forEach((s) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${s.service}</td><td>${s.enabled ? 'Yes' : 'No'}</td><td>${s.active ? 'Running' : 'Stopped'}</td>`;
+      servicesBody.appendChild(tr);
+    });
+
+    document.getElementById('ov-cpu').textContent = '-';
+    document.getElementById('ov-ram').textContent = `${general.ram_total_mb || '-'} MB total`;
+    document.getElementById('ov-temp').textContent = general.temperature_c ? `${general.temperature_c.toFixed(1)} C` : 'N/A';
+    document.getElementById('ov-uptime').textContent = '-';
+
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/api/monitor/ws`);
+    ws.onmessage = (ev) => {
+      const m = JSON.parse(ev.data);
+      document.getElementById('ov-cpu').textContent = `${m.cpu_percent}%`;
+      document.getElementById('ov-ram').textContent = `${m.ram_used_mb}/${m.ram_total_mb} MB`;
+      document.getElementById('ov-temp').textContent = m.temp_c ? `${m.temp_c.toFixed(1)} C` : 'N/A';
+      document.getElementById('ov-uptime').textContent = fmtUptime(m.uptime_seconds);
+    };
+  } catch (err) {
+    const status = document.getElementById('top-status');
+    if (status) status.textContent = `Overview load failed: ${err.message}`;
+    const servicesBody = document.getElementById('ov-services-body');
+    if (servicesBody) {
+      servicesBody.innerHTML = '<tr><td colspan="3" class="muted">Failed to load overview data. Refresh and re-login if needed.</td></tr>';
+    }
+  }
+}
+
+async function loadFiles() {
+  const pathEl = document.getElementById('path');
+  const sortByEl = document.getElementById('sortBy');
+  const sortOrderEl = document.getElementById('sortOrder');
+  const tbody = document.querySelector('#files-table tbody');
+  if (!pathEl || !sortByEl || !sortOrderEl || !tbody) return;
+
+  const path = pathEl.value;
+  const sortBy = sortByEl.value;
+  const sortOrder = sortOrderEl.value;
+  const data = await api(`/api/files/list?path=${encodeURIComponent(path)}&sort_by=${sortBy}&order=${sortOrder}`);
+  tbody.innerHTML = '';
+
+  data.data.forEach((f) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${f.is_dir ? '[DIR]' : '[FILE]'} ${f.name}</td><td>${fmtBytes(f.size)}</td><td>${new Date(f.mtime * 1000).toLocaleString()}</td><td>${
+      f.is_dir ? `<button onclick="setPath('${f.path}')">Open</button>` : `<button onclick="window.open('/api/files/download?path=${encodeURIComponent(f.path)}')">Download</button>`
+    } <button onclick="renameItem('${f.path}')">Rename</button> <button onclick="deleteItem('${f.path}')">Delete</button></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function setPath(p) {
+  const pathEl = document.getElementById('path');
+  if (!pathEl) return;
+  pathEl.value = p;
+  loadFiles();
+}
+
+async function deleteItem(path) {
+  if (!confirm(`Delete ${path}?`)) return;
+  await api('/api/files/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  });
+  await loadFiles();
+}
+
+async function renameItem(path) {
+  const newName = prompt('New name:');
+  if (!newName) return;
+  await api('/api/files/rename', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, new_name: newName }),
+  });
+  await loadFiles();
+}
+
+async function createFolder() {
+  const pathEl = document.getElementById('path');
+  const nameEl = document.getElementById('mkdir-name');
+  if (!pathEl || !nameEl) return;
+
+  const path = pathEl.value;
+  const name = nameEl.value;
+  await api('/api/files/mkdir', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, name }),
+  });
+  nameEl.value = '';
+  await loadFiles();
+}
+
+async function uploadFiles(files) {
+  const pathEl = document.getElementById('path');
+  if (!pathEl) return;
+
+  const path = pathEl.value;
+  for (const file of files) {
+    const fd = new FormData();
+    fd.append('file', file);
+    await api(`/api/files/upload?path=${encodeURIComponent(path)}`, { method: 'POST', body: fd });
+  }
+  await loadFiles();
+}
+
+async function loadServices() {
+  const tbody = document.querySelector('#services-table tbody');
+  if (!tbody) return;
+
+  try {
+    const data = await api('/api/services/list');
+    tbody.innerHTML = '';
+    data.data.forEach((s) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${s.service}</td><td>${s.enabled}</td><td>${s.active}</td><td><button onclick="serviceAction('${s.service}','enable')">Enable</button> <button onclick="serviceAction('${s.service}','disable')">Disable</button> <button onclick="serviceAction('${s.service}','restart')">Restart</button></td>`;
+      tbody.appendChild(tr);
+    });
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="4" class="muted">Failed to load services: ${err.message}</td></tr>`;
+  }
+}
+
+async function serviceAction(service, action) {
+  await api(`/api/services/${action}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ service }),
+  });
+  await loadServices();
+}
+
+async function createAppUser() {
+  await api('/api/users/app', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: document.getElementById('new-user').value,
+      password: document.getElementById('new-pass').value,
+      role: document.getElementById('new-role').value,
+    }),
+  });
+  alert('App user created');
+}
+
+async function createSystemUser() {
+  await api('/api/users/system/create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: document.getElementById('sys-user').value,
+      password: document.getElementById('sys-pass').value,
+      role: 'user',
+    }),
+  });
+  alert('System user created');
+}
+
+async function loadSessions() {
+  const box = document.getElementById('sessions-box');
+  if (!box) return;
+  const data = await api('/api/users/sessions');
+  box.textContent = JSON.stringify(data.data, null, 2);
+}
+
 async function loadNetworkPage() {
   const [curRes, stateRes] = await Promise.all([
     api('/api/network/current'),
@@ -579,11 +777,23 @@ if (localStorage.getItem('theme-dark') === '1') {
 }
 
 const page = document.body.getAttribute('data-page');
+if (page === 'overview') {
+  loadOverviewPage();
+}
 if (page === 'general') {
   loadGeneralPage();
 }
 if (page === 'storage') {
   loadStoragePage();
+}
+if (page === 'files') {
+  loadFiles();
+}
+if (page === 'services') {
+  loadServices();
+}
+if (page === 'dashboard') {
+  loadSessions();
 }
 if (page === 'network') {
   loadNetworkPage();
@@ -597,4 +807,20 @@ if (page === 'nas') {
   initWipeUi('nvme');
   document.getElementById('usb-share-form').addEventListener('submit', provisionUsbShare);
   document.getElementById('nvme-share-form').addEventListener('submit', provisionNvmeShare);
+}
+
+const dz = document.getElementById('drop-zone');
+if (dz) {
+  dz.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dz.style.opacity = 0.7;
+  });
+  dz.addEventListener('dragleave', () => {
+    dz.style.opacity = 1;
+  });
+  dz.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    dz.style.opacity = 1;
+    await uploadFiles(e.dataTransfer.files);
+  });
 }

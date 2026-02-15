@@ -38,6 +38,9 @@ templates = Jinja2Templates(directory='templates')
 
 @app.on_event('startup')
 def startup():
+    if settings.jwt_secret == 'change-me':
+        raise RuntimeError('Refusing to start with insecure default JWT secret. Set JWT_SECRET in .env')
+
     Path(settings.nas_root).mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
 
@@ -54,8 +57,16 @@ def startup():
 @app.get('/', response_class=HTMLResponse)
 def root(request: Request):
     if request.cookies.get('access_token'):
-        return RedirectResponse('/dashboard')
+        return RedirectResponse('/overview')
     return templates.TemplateResponse('login.html', {'request': request})
+
+
+@app.get('/overview', response_class=HTMLResponse)
+def overview_page(request: Request):
+    redirect = _require_login(request)
+    if redirect:
+        return redirect
+    return templates.TemplateResponse('overview.html', {'request': request, 'page': 'overview'})
 
 
 @app.get('/dashboard', response_class=HTMLResponse)
@@ -85,6 +96,22 @@ def storage_page(request: Request):
     if redirect:
         return redirect
     return templates.TemplateResponse('storage_page.html', {'request': request, 'page': 'storage'})
+
+
+@app.get('/files', response_class=HTMLResponse)
+def files_page(request: Request):
+    redirect = _require_login(request)
+    if redirect:
+        return redirect
+    return templates.TemplateResponse('file_manager_page.html', {'request': request, 'page': 'files'})
+
+
+@app.get('/services', response_class=HTMLResponse)
+def services_page(request: Request):
+    redirect = _require_login(request)
+    if redirect:
+        return redirect
+    return templates.TemplateResponse('services_page.html', {'request': request, 'page': 'services'})
 
 
 @app.get('/network', response_class=HTMLResponse)

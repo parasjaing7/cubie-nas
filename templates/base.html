@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Cubie NAS</title>
-  <link rel="stylesheet" href="/static/css/router.css" />
+  <link rel="stylesheet" href="/static/css/router.css?v=20260215b" />
 </head>
 <body data-page="{{ page }}">
   <div class="layout">
@@ -17,11 +17,37 @@
         </div>
       </div>
       <nav>
-        <a href="/dashboard" class="nav-link {% if page == 'dashboard' %}active{% endif %}">User Management</a>
-        <a href="/general" class="nav-link {% if page == 'general' %}active{% endif %}">General Info</a>
-        <a href="/storage" class="nav-link {% if page == 'storage' %}active{% endif %}">Storage</a>
-        <a href="/network" class="nav-link {% if page == 'network' %}active{% endif %}">Network Settings</a>
-        <a href="/nas" class="nav-link {% if page == 'nas' %}active{% endif %}">NAS Management</a>
+        <div class="nav-group">
+          <p class="nav-group-title">System</p>
+          <a href="/overview" class="nav-link {% if page == 'overview' %}active{% endif %}">Overview</a>
+          <a href="/general" class="nav-link {% if page == 'general' %}active{% endif %}">General Info</a>
+          <a href="/services" class="nav-link {% if page == 'services' %}active{% endif %}">Services</a>
+        </div>
+
+        <div class="nav-group">
+          <p class="nav-group-title">Storage</p>
+          <a href="/storage" class="nav-link {% if page == 'storage' %}active{% endif %}">Connected Drives</a>
+        </div>
+
+        <div class="nav-group">
+          <p class="nav-group-title">Sharing</p>
+          <a href="/nas" class="nav-link {% if page == 'nas' %}active{% endif %}">NAS Management</a>
+        </div>
+
+        <div class="nav-group">
+          <p class="nav-group-title">Access</p>
+          <a href="/dashboard" class="nav-link {% if page == 'dashboard' %}active{% endif %}">User Management</a>
+        </div>
+
+        <div class="nav-group">
+          <p class="nav-group-title">Network</p>
+          <a href="/network" class="nav-link {% if page == 'network' %}active{% endif %}">Network Settings</a>
+        </div>
+
+        <div class="nav-group">
+          <p class="nav-group-title">Tools</p>
+          <a href="/files" class="nav-link {% if page == 'files' %}active{% endif %}">File Manager</a>
+        </div>
       </nav>
       <div class="side-actions">
         <button id="theme-toggle" class="ghost-btn">Theme</button>
@@ -38,6 +64,6 @@
       </main>
     </section>
   </div>
-  <script src="/static/js/router.js"></script>
+  <script src="/static/js/router.js?v=20260215b"></script>
 </body>
 </html>

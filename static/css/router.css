@@ -82,6 +82,26 @@ nav {
   gap: 0.45rem;
 }
 
+.nav-group {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.nav-group + .nav-group {
+  margin-top: 0.35rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.nav-group-title {
+  margin: 0;
+  padding: 0 0.15rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9fb9ce;
+}
+
 .nav-link {
   color: var(--sidebar-text);
   text-decoration: none;

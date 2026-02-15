@@ -1,78 +1,11 @@
 {% extends 'base.html' %}
 {% set page = 'dashboard' %}
 
-{% block title %}Dashboard{% endblock %}
+{% block title %}User Management{% endblock %}
 
 {% block content %}
-<div class="dashboard-grid">
-  <section class="panel dashboard-panel panel-monitoring">
-    <div class="panel-head">
-      <h3>System Monitoring (Realtime)</h3>
-    </div>
-    <div class="stats" id="stats">
-      <div class="stat-item"><span>CPU</span><strong id="cpu">-</strong></div>
-      <div class="stat-item"><span>RAM</span><strong id="ram">-</strong></div>
-      <div class="stat-item"><span>Temp</span><strong id="temp">-</strong></div>
-      <div class="stat-item"><span>Net RX</span><strong id="rx">-</strong></div>
-      <div class="stat-item"><span>Net TX</span><strong id="tx">-</strong></div>
-      <div class="stat-item"><span>Disk Read</span><strong id="disk-r">-</strong></div>
-      <div class="stat-item"><span>Disk Write</span><strong id="disk-w">-</strong></div>
-      <div class="stat-item"><span>Uptime</span><strong id="uptime">-</strong></div>
-    </div>
-  </section>
-
-  <section class="panel dashboard-panel panel-storage">
-    <div class="panel-head">
-      <h3>Storage</h3>
-      <button type="button" onclick="loadDrives()">Refresh Drives</button>
-    </div>
-    <div class="table-scroll panel-scroll">
-      <table id="drives-table">
-        <thead>
-          <tr><th>Device</th><th>FS</th><th>Size</th><th>Mount</th><th>Used</th><th>Free</th><th>SMART</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </section>
-
-  <section class="panel dashboard-panel panel-files">
-    <div class="panel-head">
-      <h3>File Manager</h3>
-      <button type="button" onclick="loadFiles()">Browse</button>
-    </div>
-    <div class="row controls-row">
-      <input id="path" value="" placeholder="relative path" />
-      <select id="sortBy"><option value="name">Name</option><option value="size">Size</option><option value="date">Date</option></select>
-      <select id="sortOrder"><option value="asc">Asc</option><option value="desc">Desc</option></select>
-    </div>
-    <div class="row controls-row">
-      <input id="mkdir-name" placeholder="new folder" />
-      <button type="button" onclick="createFolder()">Create Folder</button>
-    </div>
-    <div id="drop-zone">Drag and drop files here to upload</div>
-    <div class="table-scroll panel-scroll">
-      <table id="files-table">
-        <thead><tr><th>Name</th><th>Size</th><th>Date</th><th>Actions</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </section>
-
-  <section class="panel dashboard-panel panel-services">
-    <div class="panel-head">
-      <h3>Services</h3>
-      <button type="button" onclick="loadServices()">Refresh Services</button>
-    </div>
-    <div class="table-scroll panel-scroll">
-      <table id="services-table">
-        <thead><tr><th>Service</th><th>Enabled</th><th>Active</th><th>Actions</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </section>
-
-  <section class="panel dashboard-panel panel-users">
+<div class="cards-grid">
+  <section class="panel panel-users" style="max-width: 980px;">
     <div class="panel-head">
       <h3>User Management (Admin)</h3>
     </div>
@@ -84,5 +17,4 @@
     <pre id="sessions-box" class="panel-scroll panel-pre"></pre>
   </section>
 </div>
-<script src="/static/js/app.js"></script>
 {% endblock %}

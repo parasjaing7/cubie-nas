@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% set page = 'services' %}
+
+{% block title %}Services{% endblock %}
+
+{% block content %}
+<div class="cards-grid">
+  <section class="panel" style="grid-column: 1 / -1;">
+    <div class="panel-head">
+      <h3>Services</h3>
+      <button type="button" onclick="loadServices()">Refresh Services</button>
+    </div>
+
+    <div class="table-scroll panel-scroll" style="max-height: 460px;">
+      <table id="services-table">
+        <thead>
+          <tr><th>Service</th><th>Enabled</th><th>Active</th><th>Actions</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}
