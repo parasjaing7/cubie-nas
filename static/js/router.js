@@ -9,6 +9,10 @@ async function api(url, options = {}) {
     options.headers['X-CSRF-Token'] = cookie('csrf_token');
   }
   const res = await fetch(url, options);
+  if (res.status === 401) {
+    window.location.href = '/';
+    throw new Error('Session expired. Please log in again.');
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Request failed' }));
     throw new Error(err.detail || 'Request failed');
@@ -31,6 +35,61 @@ function fmtUptime(sec) {
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
   return `${h}h ${m}m`;
+}
+
+function fmtTimeNow() {
+  return new Date().toLocaleTimeString();
+}
+
+const storageState = {
+  drives: [],
+};
+
+function setStorageSummary(drives) {
+  const total = document.getElementById('storage-total');
+  const mounted = document.getElementById('storage-mounted');
+  const usb = document.getElementById('storage-usb');
+  const nvme = document.getElementById('storage-nvme');
+  if (total) total.textContent = String(drives.length);
+  if (mounted) mounted.textContent = String(drives.filter((d) => !!d.mountpoint).length);
+  if (usb) usb.textContent = String(drives.filter((d) => d.is_usb || String(d.transport || '').toLowerCase() === 'usb').length);
+  if (nvme) nvme.textContent = String(drives.filter((d) => String(d.transport || '').toLowerCase() === 'nvme').length);
+}
+
+function renderStorageRows(drives) {
+  const body = document.getElementById('storage-body');
+  if (!body) return;
+  body.innerHTML = '';
+  if (drives.length === 0) {
+    body.innerHTML = '<tr><td colspan="7" class="muted">No drives match the current filter.</td></tr>';
+    return;
+  }
+  drives.forEach((d) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${d.name || '-'}</td><td>${d.device}</td><td>${d.fstype || '-'}</td><td>${d.mountpoint || '-'}</td><td>${fmtBytes(d.used_bytes)}</td><td>${fmtBytes(d.free_bytes)}</td><td>${d.smart_status || '-'}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+function applyStorageFilters() {
+  const filterEl = document.getElementById('storage-filter');
+  const searchEl = document.getElementById('storage-search');
+  const filter = filterEl ? filterEl.value : 'all';
+  const search = (searchEl ? searchEl.value : '').trim().toLowerCase();
+
+  let drives = storageState.drives.slice();
+  if (filter === 'mounted') {
+    drives = drives.filter((d) => !!d.mountpoint);
+  } else if (filter === 'usb') {
+    drives = drives.filter((d) => d.is_usb || String(d.transport || '').toLowerCase() === 'usb');
+  } else if (filter === 'nvme') {
+    drives = drives.filter((d) => String(d.transport || '').toLowerCase() === 'nvme');
+  }
+
+  if (search) {
+    drives = drives.filter((d) => `${d.name || ''} ${d.device || ''}`.toLowerCase().includes(search));
+  }
+  renderStorageRows(drives);
 }
 
 const provisionState = {
@@ -186,42 +245,60 @@ function initWipeUi(prefix) {
 }
 
 async function loadGeneralPage() {
-  const g = await api('/api/system/general-info');
-  const d = g.data;
-  document.getElementById('g-model').textContent = d.model || '-';
-  document.getElementById('g-hostname').textContent = d.hostname || '-';
-  document.getElementById('g-os').textContent = d.os || '-';
-  document.getElementById('g-arch').textContent = d.arch || '-';
-  document.getElementById('g-cpu-model').textContent = d.cpu_model || '-';
-  document.getElementById('g-cpu-cores').textContent = `${d.cpu_cores_physical} physical / ${d.cpu_cores_logical} logical`;
-  document.getElementById('g-ram-total').textContent = `${d.ram_total_mb} MB`;
-  document.getElementById('g-temp').textContent = d.temperature_c ? `${d.temperature_c.toFixed(1)} C` : 'N/A';
+  try {
+    const g = await api('/api/system/general-info');
+    const d = g.data;
+    document.getElementById('g-model').textContent = d.model || '-';
+    document.getElementById('g-hostname').textContent = d.hostname || '-';
+    document.getElementById('g-os').textContent = d.os || '-';
+    document.getElementById('g-arch').textContent = d.arch || '-';
+    document.getElementById('g-cpu-model').textContent = d.cpu_model || '-';
+    document.getElementById('g-cpu-cores').textContent = `${d.cpu_cores_physical} physical / ${d.cpu_cores_logical} logical`;
+    document.getElementById('g-ram-total').textContent = `${d.ram_total_mb} MB`;
+    document.getElementById('g-temp').textContent = d.temperature_c ? `${d.temperature_c.toFixed(1)} C` : 'N/A';
 
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(`${proto}://${location.host}/api/monitor/ws`);
-  ws.onmessage = (ev) => {
-    const m = JSON.parse(ev.data);
-    document.getElementById('live-cpu').textContent = `${m.cpu_percent}%`;
-    document.getElementById('live-ram').textContent = `${m.ram_used_mb}/${m.ram_total_mb} MB`;
-    document.getElementById('live-rx').textContent = `${fmtBytes(m.net_rx_bps)}/s`;
-    document.getElementById('live-tx').textContent = `${fmtBytes(m.net_tx_bps)}/s`;
-    document.getElementById('live-up').textContent = fmtUptime(m.uptime_seconds);
-  };
-  ws.onclose = () => {
-    document.getElementById('top-status').textContent = 'Reconnecting...';
-    setTimeout(loadGeneralPage, 2000);
-  };
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/api/monitor/ws`);
+    ws.onmessage = (ev) => {
+      const m = JSON.parse(ev.data);
+      document.getElementById('live-cpu').textContent = `${m.cpu_percent}%`;
+      document.getElementById('live-ram').textContent = `${m.ram_used_mb}/${m.ram_total_mb} MB`;
+      document.getElementById('live-rx').textContent = `${fmtBytes(m.net_rx_bps)}/s`;
+      document.getElementById('live-tx').textContent = `${fmtBytes(m.net_tx_bps)}/s`;
+      document.getElementById('live-up').textContent = fmtUptime(m.uptime_seconds);
+    };
+    ws.onclose = () => {
+      document.getElementById('top-status').textContent = 'Reconnecting...';
+      setTimeout(loadGeneralPage, 2000);
+    };
+    const top = document.getElementById('top-status');
+    if (top) top.textContent = 'General info loaded';
+    const stamp = document.getElementById('g-last-refresh');
+    if (stamp) stamp.textContent = fmtTimeNow();
+  } catch (err) {
+    const top = document.getElementById('top-status');
+    if (top) top.textContent = `General info load failed: ${err.message}`;
+  }
 }
 
 async function loadStoragePage() {
-  const res = await api('/api/storage/drives');
   const body = document.getElementById('storage-body');
+  if (!body) return;
   body.innerHTML = '';
-  res.data.forEach((d) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${d.name || '-'}</td><td>${d.device}</td><td>${d.fstype || '-'}</td><td>${d.mountpoint || '-'}</td><td>${fmtBytes(d.used_bytes)}</td><td>${fmtBytes(d.free_bytes)}</td><td>${d.smart_status || '-'}</td>`;
-    body.appendChild(tr);
-  });
+
+  try {
+    const res = await api('/api/storage/drives');
+    const drives = Array.isArray(res.data) ? res.data : [];
+    storageState.drives = drives;
+    setStorageSummary(drives);
+    applyStorageFilters();
+    const top = document.getElementById('top-status');
+    if (top) top.textContent = `Storage loaded (${drives.length} drive${drives.length === 1 ? '' : 's'})`;
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="7" class="muted">Failed to load storage: ${err.message}</td></tr>`;
+    const top = document.getElementById('top-status');
+    if (top) top.textContent = 'Storage load failed';
+  }
 }
 
 async function loadOverviewPage() {
@@ -420,6 +497,51 @@ async function loadSessions() {
   if (!box) return;
   const data = await api('/api/users/sessions');
   box.textContent = JSON.stringify(data.data, null, 2);
+}
+
+async function loadLogsPage() {
+  const box = document.getElementById('logs-box');
+  const linesEl = document.getElementById('logs-lines');
+  if (!box) return;
+
+  const lines = linesEl ? Number(linesEl.value || 200) : 200;
+  try {
+    const res = await api(`/api/system/logs?lines=${encodeURIComponent(String(lines))}`);
+    const entries = Array.isArray(res.data) ? res.data : [];
+    box.textContent = entries.join('\n');
+    const status = document.getElementById('top-status');
+    if (status) status.textContent = 'Logs loaded';
+  } catch (err) {
+    box.textContent = `Failed to load logs: ${err.message}`;
+  }
+}
+
+async function loadSettingsPage() {
+  const themeEl = document.getElementById('settings-theme');
+  const apiEl = document.getElementById('settings-health-api');
+  const monitorEl = document.getElementById('settings-health-monitor');
+
+  if (themeEl) {
+    themeEl.textContent = document.body.classList.contains('dark') ? 'Dark' : 'Light';
+  }
+
+  if (apiEl) apiEl.textContent = '-';
+  if (monitorEl) monitorEl.textContent = '-';
+
+  try {
+    const health = await api('/healthz');
+    if (apiEl) apiEl.textContent = health.ok ? 'OK' : 'Error';
+  } catch (err) {
+    if (apiEl) apiEl.textContent = `Error: ${err.message}`;
+  }
+
+  try {
+    const state = await api('/api/network/state');
+    const ethernet = state && state.data && state.data.ethernet ? state.data.ethernet.enabled : null;
+    if (monitorEl) monitorEl.textContent = ethernet === null ? 'Unknown' : ethernet ? 'OK' : 'Degraded';
+  } catch (err) {
+    if (monitorEl) monitorEl.textContent = `Error: ${err.message}`;
+  }
 }
 
 async function loadNetworkPage() {
@@ -785,6 +907,10 @@ if (page === 'general') {
 }
 if (page === 'storage') {
   loadStoragePage();
+  const filterEl = document.getElementById('storage-filter');
+  const searchEl = document.getElementById('storage-search');
+  if (filterEl) filterEl.addEventListener('change', applyStorageFilters);
+  if (searchEl) searchEl.addEventListener('input', applyStorageFilters);
 }
 if (page === 'files') {
   loadFiles();
@@ -792,8 +918,14 @@ if (page === 'files') {
 if (page === 'services') {
   loadServices();
 }
-if (page === 'dashboard') {
+if (page === 'users') {
   loadSessions();
+}
+if (page === 'logs') {
+  loadLogsPage();
+}
+if (page === 'settings') {
+  loadSettingsPage();
 }
 if (page === 'network') {
   loadNetworkPage();

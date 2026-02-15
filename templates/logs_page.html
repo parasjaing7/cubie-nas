@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% set page = 'logs' %}
+
+{% block title %}Logs{% endblock %}
+
+{% block content %}
+<div class="cards-grid">
+  <section class="panel" style="grid-column: 1 / -1;">
+    <div class="panel-head">
+      <h3>Service Logs (cubie-nas)</h3>
+      <div class="row controls-row" style="margin:0;">
+        <select id="logs-lines" style="max-width:120px;">
+          <option value="200">200 lines</option>
+          <option value="500">500 lines</option>
+          <option value="1000">1000 lines</option>
+        </select>
+        <button type="button" onclick="loadLogsPage()">Refresh</button>
+      </div>
+    </div>
+    <pre id="logs-box" class="panel-scroll panel-pre" style="max-height: 560px;"></pre>
+  </section>
+</div>
+{% endblock %}

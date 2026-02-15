@@ -58,6 +58,35 @@ sudo bash scripts/install.sh
 
 This script installs dependencies, creates virtualenv, generates TLS cert, installs `systemd` service, and starts the server.
 
+## Safe Deploy (preserve runtime `.env` and `.venv`)
+
+Use this for code updates to `/opt/cubie-nas` so runtime secrets and virtualenv are never deleted:
+
+```bash
+cd /home/radxa/nas102/cubie-nas
+bash scripts/deploy-safe.sh
+```
+
+Dry-run preview (no changes):
+
+```bash
+bash scripts/deploy-safe.sh --dry-run
+```
+
+This script enforces rsync excludes for `.env`, `.venv/`, and `__pycache__/`, then restarts `cubie-nas` and verifies `systemctl is-active` is `active`.
+
+Shortcut via Makefile:
+
+```bash
+make deploy-safe
+```
+
+Dry-run shortcut:
+
+```bash
+make deploy-safe-dry
+```
+
 ## Manual Install (if needed)
 
 ```bash

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..config import settings
 from ..deps import enforce_csrf, get_current_user, require_admin
@@ -56,3 +56,12 @@ async def firewall_apply(_: object = Depends(require_admin)):
         if result.exit_code != 0:
             raise HTTPException(status_code=400, detail=result.stderr or result.stdout)
     return ApiResponse(ok=True, message='Firewall configured')
+
+
+@router.get('/logs')
+async def system_logs(lines: int = Query(default=200, ge=50, le=2000), _: object = Depends(require_admin)):
+    result = await _runner.run(['journalctl', '-u', 'cubie-nas', '-n', str(lines), '--no-pager'])
+    if result.exit_code != 0:
+        raise HTTPException(status_code=400, detail=result.stderr or result.stdout)
+    entries = result.stdout.splitlines() if result.stdout else []
+    return {'ok': True, 'data': entries}

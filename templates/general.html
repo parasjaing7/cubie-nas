@@ -3,6 +3,15 @@
 {% block title %}General Info{% endblock %}
 
 {% block content %}
+<div class="panel" style="margin-bottom: 1rem;">
+  <div class="panel-head">
+    <h3>System Snapshot</h3>
+    <div class="row controls-row" style="margin:0;">
+      <span class="muted">Last refresh: <strong id="g-last-refresh">-</strong></span>
+      <button type="button" onclick="loadGeneralPage()">Refresh</button>
+    </div>
+  </div>
+</div>
 <div class="cards-grid">
   <article class="card">
     <h3>Device</h3>

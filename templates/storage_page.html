@@ -3,10 +3,35 @@
 {% block title %}Storage{% endblock %}
 
 {% block content %}
+<div class="cards-grid" style="margin-bottom: 1rem;">
+  <article class="card">
+    <h3>Total Drives</h3>
+    <div class="kv"><span>Detected</span><strong id="storage-total">0</strong></div>
+  </article>
+  <article class="card">
+    <h3>Mounted</h3>
+    <div class="kv"><span>Available</span><strong id="storage-mounted">0</strong></div>
+  </article>
+  <article class="card">
+    <h3>Transport</h3>
+    <div class="kv"><span>USB</span><strong id="storage-usb">0</strong></div>
+    <div class="kv"><span>NVMe</span><strong id="storage-nvme">0</strong></div>
+  </article>
+</div>
+
 <div class="panel">
   <div class="panel-head">
     <h3>Connected Drives</h3>
-    <button onclick="loadStoragePage()">Refresh</button>
+    <div class="row controls-row" style="margin:0;">
+      <select id="storage-filter" style="max-width: 180px;">
+        <option value="all">All drives</option>
+        <option value="mounted">Mounted only</option>
+        <option value="usb">USB only</option>
+        <option value="nvme">NVMe only</option>
+      </select>
+      <input id="storage-search" placeholder="Search by name/device" />
+      <button type="button" onclick="loadStoragePage()">Refresh</button>
+    </div>
   </div>
   <table>
     <thead>

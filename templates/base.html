@@ -19,9 +19,10 @@
       <nav>
         <div class="nav-group">
           <p class="nav-group-title">System</p>
-          <a href="/overview" class="nav-link {% if page == 'overview' %}active{% endif %}">Overview</a>
+          <a href="/overview" class="nav-link {% if page == 'overview' %}active{% endif %}">Dashboard</a>
           <a href="/general" class="nav-link {% if page == 'general' %}active{% endif %}">General Info</a>
           <a href="/services" class="nav-link {% if page == 'services' %}active{% endif %}">Services</a>
+          <a href="/logs" class="nav-link {% if page == 'logs' %}active{% endif %}">Logs</a>
         </div>
 
         <div class="nav-group">
@@ -36,17 +37,18 @@
 
         <div class="nav-group">
           <p class="nav-group-title">Access</p>
-          <a href="/dashboard" class="nav-link {% if page == 'dashboard' %}active{% endif %}">User Management</a>
+          <a href="/users" class="nav-link {% if page == 'users' %}active{% endif %}">Users</a>
         </div>
 
         <div class="nav-group">
           <p class="nav-group-title">Network</p>
-          <a href="/network" class="nav-link {% if page == 'network' %}active{% endif %}">Network Settings</a>
+          <a href="/network" class="nav-link {% if page == 'network' %}active{% endif %}">Network</a>
         </div>
 
         <div class="nav-group">
           <p class="nav-group-title">Tools</p>
           <a href="/files" class="nav-link {% if page == 'files' %}active{% endif %}">File Manager</a>
+          <a href="/settings" class="nav-link {% if page == 'settings' %}active{% endif %}">Settings</a>
         </div>
       </nav>
       <div class="side-actions">

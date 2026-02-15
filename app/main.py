@@ -13,6 +13,7 @@ from .config import settings
 from .db import Base, SessionLocal, engine
 from .models import User
 from .routers import auth, bonus, files, monitoring, network, services, storage, system, users
+from .security import decode_token
 from .security import hash_password
 
 app = FastAPI(title=settings.app_name)
@@ -73,12 +74,55 @@ def overview_page(request: Request):
 def dashboard(request: Request):
     if not request.cookies.get('access_token'):
         return RedirectResponse('/')
-    return templates.TemplateResponse('dashboard.html', {'request': request})
+    return RedirectResponse('/overview')
+
+
+@app.get('/users', response_class=HTMLResponse)
+def users_page(request: Request):
+    redirect = _require_login(request)
+    if redirect:
+        return redirect
+    return templates.TemplateResponse('users_page.html', {'request': request, 'page': 'users'})
+
+
+@app.get('/logs', response_class=HTMLResponse)
+def logs_page(request: Request):
+    redirect = _require_login(request)
+    if redirect:
+        return redirect
+    return templates.TemplateResponse('logs_page.html', {'request': request, 'page': 'logs'})
+
+
+@app.get('/settings', response_class=HTMLResponse)
+def settings_page(request: Request):
+    redirect = _require_login(request)
+    if redirect:
+        return redirect
+    return templates.TemplateResponse('settings_page.html', {'request': request, 'page': 'settings'})
 
 
 def _require_login(request: Request):
-    if not request.cookies.get('access_token'):
+    token = request.cookies.get('access_token')
+    if not token:
         return RedirectResponse('/')
+
+    try:
+        payload = decode_token(token)
+    except ValueError:
+        return RedirectResponse('/')
+
+    username = payload.get('sub')
+    if not username:
+        return RedirectResponse('/')
+
+    db: Session = SessionLocal()
+    try:
+        user = db.query(User).filter(User.username == username, User.is_active.is_(True)).first()
+        if not user:
+            return RedirectResponse('/')
+    finally:
+        db.close()
+
     return None
 
 
