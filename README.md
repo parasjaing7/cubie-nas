@@ -148,3 +148,42 @@ sudo ufw status verbose
 - App runs with `MemoryMax=300M` in `systemd/cubie-nas.service`.
 - Snapshot support depends on filesystem (btrfs/zfs) and is not enabled by default.
 
+## Knowledge Base (KB)
+
+This repository includes a structured knowledge base under `/kb` that serves as long-term memory for debugging, fixes, and operational knowledge.
+
+### Purpose
+
+- Prevent repeated mistakes by recording every validated fix.
+- Provide a searchable reference for common issues across Linux, storage, networking, SMB, USB, services, and more.
+- Act as a RAG (Retrieval-Augmented Generation) store for AI coding assistants (Copilot, Codex, Claude).
+
+### Structure
+
+```
+kb/
+  INDEX.md          # Master index of all entries
+  TEMPLATE.md       # Entry template (copy for new entries)
+  CONTRIBUTING.md   # Quality rules and contribution guide
+  linux/            # OS-level: systemd, packages, boot, logs
+  smb/              # Samba config, shares, testparm
+  usb/              # USB detection, hotplug, mount, power
+  kernel/           # Kernel panics, modules, dmesg, drivers
+  uboot/            # U-Boot config, boot sequence, serial
+  networking/       # IP config, DNS, firewall, interfaces
+  storage/          # Disks, partitions, fstab, SMART, mount
+  permissions/      # Ownership, ACLs, chmod, NAS user mapping
+  services/         # systemd units, cubie-nas service lifecycle
+  docker/           # Container lifecycle, images, volumes
+  git/              # Git workflows, deploy sync
+  troubleshooting/  # Cross-cutting multi-category issues
+  opentap/          # OpenTAP integration, test automation
+  tools/            # CLI utilities, scripts, dev tooling
+```
+
+### How to Use
+
+1. **Before debugging:** Search `/kb/INDEX.md` or the relevant category folder.
+2. **After solving an issue:** Create a KB entry using `kb/TEMPLATE.md` and add it to `kb/INDEX.md`.
+3. **Quality rules:** No raw logs, no speculation, only validated final fixes. See `kb/CONTRIBUTING.md`.
+

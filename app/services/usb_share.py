@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 import shlex
-import shutil
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -12,6 +13,7 @@ from .system_cmd import CommandRunner, RealCommandRunner
 from .transaction import TransactionRunner, TransactionStep
 
 SUPPORTED_FS = {'ext4', 'exfat'}
+_PROVISION_LOCK = asyncio.Lock()
 
 
 def _mkfs_cmd(device: str, fs_type: str) -> list[str]:
@@ -85,6 +87,20 @@ async def _preflight_device(
         return False, 'Selected device is not USB storage', {'transport': transport, 'type': dev_type}
     if expected_transport == 'nvme' and transport != 'nvme':
         return False, 'Selected device is not NVMe storage', {'transport': transport, 'type': dev_type}
+
+    result_root = await runner.run(['findmnt', '-nr', '-o', 'SOURCE', '/'])
+    root_src = result_root.stdout.strip() if result_root.exit_code == 0 and result_root.stdout else ''
+    os_disk = ''
+    if root_src.startswith('/dev/'):
+        result_pk = await runner.run(['lsblk', '-no', 'PKNAME', root_src])
+        if result_pk.exit_code == 0 and result_pk.stdout.strip():
+            os_disk = f"/dev/{result_pk.stdout.strip()}"
+
+    if root_src and (device == root_src or device == os_disk):
+        return False, 'Selected device is the OS disk/root device and cannot be provisioned', {
+            'root_source': root_src,
+            'os_disk': os_disk,
+        }
 
     return True, '', {'transport': transport, 'type': dev_type, 'size': size, 'model': model}
 
@@ -193,7 +209,7 @@ def _upsert_fstab(device_ref: str, mountpoint: str, fs_type: str, mount_opts: st
     if not replaced:
         new_lines.append(target)
 
-    fstab.write_text('\n'.join(new_lines).rstrip() + '\n')
+    _atomic_write_text(fstab, '\n'.join(new_lines).rstrip() + '\n')
 
 
 def _upsert_samba_share(share_name: str, mountpoint: str, nas_user: str):
@@ -239,20 +255,84 @@ def _upsert_samba_share(share_name: str, mountpoint: str, nas_user: str):
         kept.append('')
     kept.extend(block)
     kept.append('')
-    smb.write_text('\n'.join(kept))
+    _atomic_write_text(smb, '\n'.join(kept))
+
+
+def _atomic_write_text(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(prefix=f'.{path.name}.', suffix='.tmp', dir=str(path.parent))
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+        dir_fd = os.open(str(path.parent), os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+    except Exception:
+        Path(tmp_path).unlink(missing_ok=True)
+        raise
+
+
+def _atomic_copy_file(source: Path, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(prefix=f'.{target.name}.', suffix='.tmp', dir=str(target.parent))
+    try:
+        with source.open('rb') as src, os.fdopen(fd, 'wb') as dst:
+            while True:
+                chunk = src.read(1024 * 1024)
+                if not chunk:
+                    break
+                dst.write(chunk)
+            dst.flush()
+            os.fsync(dst.fileno())
+        os.replace(tmp_path, target)
+        dir_fd = os.open(str(target.parent), os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+    except Exception:
+        Path(tmp_path).unlink(missing_ok=True)
+        raise
+
+
+async def _verify_mount(
+    target_mount: str,
+    expected_uuid: Optional[str],
+    runner: CommandRunner,
+) -> tuple[bool, str]:
+    result_target = await runner.run(['findmnt', '-nr', '-o', 'TARGET', '--target', target_mount])
+    mounted_target = result_target.stdout.strip() if result_target.exit_code == 0 and result_target.stdout else ''
+    if mounted_target != target_mount:
+        return False, 'Post-mount verification failed: mountpoint is not active'
+
+    if expected_uuid:
+        result_source = await runner.run(['findmnt', '-nr', '-o', 'SOURCE', '--target', target_mount])
+        mount_source = result_source.stdout.strip() if result_source.exit_code == 0 and result_source.stdout else ''
+        if not mount_source.startswith('/dev/'):
+            return False, 'Post-mount verification failed: unable to determine mounted source device'
+        mounted_uuid = await _uuid_for_device(mount_source, runner)
+        if mounted_uuid != expected_uuid:
+            return False, 'Post-mount verification failed: mounted device UUID mismatch'
+
+    return True, ''
 
 
 def _backup_file(path: Path) -> Optional[Path]:
     if not path.exists():
         return None
     backup = path.with_suffix(path.suffix + '.cubie-nas.bak')
-    shutil.copy2(path, backup)
+    _atomic_copy_file(path, backup)
     return backup
 
 
 def _restore_file(path: Path, backup: Optional[Path]) -> None:
     if backup and backup.exists():
-        shutil.copy2(backup, path)
+        _atomic_copy_file(backup, path)
         return
     if path.exists():
         path.unlink(missing_ok=True)
@@ -318,6 +398,36 @@ async def provision_block_share(
     wipe_confirmation: Optional[str],
     runner: CommandRunner | None,
 ) -> tuple[bool, str, dict]:
+    if _PROVISION_LOCK.locked():
+        return False, 'Another provisioning operation is already in progress', {}
+
+    async with _PROVISION_LOCK:
+        return await _provision_block_share_impl(
+            device=device,
+            share_name=share_name,
+            mountpoint=mountpoint,
+            format_before_mount=format_before_mount,
+            fs_type=fs_type,
+            expected_transport=expected_transport,
+            label=label,
+            wipe_repartition=wipe_repartition,
+            wipe_confirmation=wipe_confirmation,
+            runner=runner,
+        )
+
+
+async def _provision_block_share_impl(
+    device: str,
+    share_name: str,
+    mountpoint: Optional[str],
+    format_before_mount: bool,
+    fs_type: Optional[str],
+    expected_transport: str,
+    label: str,
+    wipe_repartition: bool,
+    wipe_confirmation: Optional[str],
+    runner: CommandRunner | None,
+) -> tuple[bool, str, dict]:
     runner = runner or RealCommandRunner()
     if not device.startswith('/dev/'):
         return False, 'Invalid device path', {}
@@ -327,7 +437,10 @@ async def provision_block_share(
         return False, 'Invalid share name', {}
 
     target_mount = mountpoint or f'/srv/nas/{name}'
-    if not target_mount.startswith('/srv/nas/'):
+    target_mount_path = Path(target_mount)
+    target_mount_resolved = target_mount_path.resolve(strict=False)
+    nas_root = Path('/srv/nas').resolve(strict=False)
+    if nas_root not in [target_mount_resolved, *target_mount_resolved.parents]:
         return False, 'Mountpoint must be under /srv/nas', {}
 
     if fs_type and fs_type not in SUPPORTED_FS:
@@ -434,6 +547,10 @@ async def provision_block_share(
             return False, result.stderr or result.stdout or 'Mount failed'
         return True, ''
 
+    async def _run_verify_mount() -> tuple[bool, str]:
+        ok_v, msg_v = await _verify_mount(target_mount, uuid, runner)
+        return ok_v, msg_v
+
     async def _run_chown() -> tuple[bool, str]:
         result = await runner.run(['chown', '-R', f'{nas_user}:{nas_user}', target_mount])
         if result.exit_code != 0:
@@ -485,6 +602,7 @@ async def provision_block_share(
     txn = TransactionRunner()
     device_ref = f'UUID={uuid}' if uuid else working_device
     txn.add_step(TransactionStep(name='mount', action=_run_mount, rollback=_rollback_mount))
+    txn.add_step(TransactionStep(name='verify_mount', action=_run_verify_mount, rollback=_rollback_mount))
     if detected_fs != 'exfat':
         txn.add_step(TransactionStep(name='chown', action=_run_chown))
         txn.add_step(TransactionStep(name='chmod', action=_run_chmod))

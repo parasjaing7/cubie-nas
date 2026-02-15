@@ -2,12 +2,33 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Optional
 
 from .system_cmd import RealCommandRunner
 
 _runner = RealCommandRunner()
+
+
+def _atomic_write_text(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(prefix=f'.{path.name}.', suffix='.tmp', dir=str(path.parent))
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+        dir_fd = os.open(str(path.parent), os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+    except Exception:
+        Path(tmp_path).unlink(missing_ok=True)
+        raise
 
 
 def _mask_from_cidr(cidr: str) -> tuple[str, str]:
@@ -124,7 +145,7 @@ async def apply_network_config(interface: str, mode: str, address: Optional[str]
             lines.append(f"    dns-nameservers {dns_value.replace(',', ' ')}")
         content = '\n'.join(lines) + '\n'
 
-    cfg_path.write_text(content)
+    _atomic_write_text(cfg_path, content)
 
     result_restart = await _runner.run(['systemctl', 'restart', 'networking'])
     if result_restart.exit_code != 0:

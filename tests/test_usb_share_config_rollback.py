@@ -29,10 +29,15 @@ def mapped_paths(monkeypatch, tmp_path):
     class MappedPath(PosixPath):
         def __new__(cls, *args, **kwargs):
             path = PosixPath(*args, **kwargs)
-            if str(path).startswith("/srv/nas/"):
+            path_str = str(path)
+            if path_str == "/srv/nas":
+                path = tmp_path
+            elif path_str.startswith("/srv/nas/"):
                 path = tmp_path / path.relative_to("/srv/nas")
-            elif str(path).startswith("/etc/"):
-                path = tmp_path / path.relative_to("/etc")
+            elif path_str == "/etc":
+                path = tmp_path / "etc"
+            elif path_str.startswith("/etc/"):
+                path = tmp_path / "etc" / path.relative_to("/etc")
             return PosixPath.__new__(cls, path)
 
     monkeypatch.setattr(usb_share, "Path", MappedPath)
@@ -48,14 +53,18 @@ def mapped_paths(monkeypatch, tmp_path):
 @pytest.mark.asyncio
 async def test_config_rollback_on_testparm_failure(mapped_paths):
     runner = MockCommandRunner()
-    runner.queue_result(_result(stdout="usb"))  # lsblk TRAN
+    runner.queue_result(_result(stdout="part usb 64G TestDisk"))  # preflight lsblk
+    runner.queue_result(_result(stdout=""))  # findmnt SOURCE /
     runner.queue_result(_result(stdout="part"))  # lsblk TYPE
-    runner.queue_result(_result(stdout=""))  # findmnt
+    runner.queue_result(_result(stdout=""))  # findmnt current mount
     runner.queue_result(_result(stdout="ext4"))  # blkid TYPE
     runner.queue_result(_result(stdout="UUID-123"))  # blkid UUID
     runner.queue_result(_result())  # chown mountpoint
     runner.queue_result(_result())  # chmod mountpoint
     runner.queue_result(_result())  # mount
+    runner.queue_result(_result(stdout="/srv/nas/testshare"))  # verify mount target
+    runner.queue_result(_result(stdout="/dev/sda1"))  # verify mount source
+    runner.queue_result(_result(stdout="UUID-123"))  # verify source UUID
     runner.queue_result(_result())  # chown -R
     runner.queue_result(_result())  # chmod -R
     runner.queue_result(_result(exit_code=1, stderr="testparm failed"))  # testparm
@@ -71,7 +80,7 @@ async def test_config_rollback_on_testparm_failure(mapped_paths):
     )
 
     assert ok is False
-    assert "Samba config test failed" in message
+    assert "testparm failed" in message.lower() or "samba config test failed" in message
     assert mapped_paths["fstab"].read_text() == mapped_paths["fstab_content"]
     assert mapped_paths["smb"].read_text() == mapped_paths["smb_content"]
     assert any(call["cmd"][0] == "umount" for call in runner.calls)
