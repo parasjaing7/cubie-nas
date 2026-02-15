@@ -23,6 +23,11 @@ body.dark {
 }
 
 * { box-sizing: border-box; }
+html, body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
 body {
   margin: 0;
   font-family: "IBM Plex Sans", "Noto Sans", sans-serif;
@@ -102,11 +107,22 @@ nav {
   padding: 1.2rem;
 }
 
+.content main {
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
 .topbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  padding: 0.75rem 0;
 }
 
 .topbar h2 {
@@ -130,6 +146,7 @@ nav {
   border-radius: 14px;
   padding: 1rem;
   box-shadow: 0 8px 24px rgba(16, 28, 43, 0.08);
+  min-width: 0;
 }
 
 .card h3,
@@ -161,6 +178,13 @@ table {
   font-size: 0.9rem;
 }
 
+thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel);
+}
+
 th, td {
   text-align: left;
   padding: 0.55rem;
@@ -188,6 +212,9 @@ button {
   cursor: pointer;
   background: var(--accent);
   color: #fff;
+  min-height: 36px;
+  font-size: 0.88rem;
+  font-weight: 600;
 }
 
 .ghost-btn {
@@ -201,6 +228,138 @@ button {
 
 .muted {
   color: var(--muted);
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(260px, 1fr));
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.dashboard-panel {
+  min-height: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.panel-monitoring,
+.panel-storage,
+.panel-files,
+.panel-services,
+.panel-users {
+  grid-column: span 1;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.stat-item {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.7rem;
+  min-width: 0;
+}
+
+.stat-item span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin-bottom: 0.2rem;
+}
+
+.stat-item strong {
+  font-size: 0.95rem;
+}
+
+.controls-row {
+  gap: 0.5rem;
+  margin-bottom: 0;
+}
+
+.controls-row > input,
+.controls-row > select {
+  flex: 1 1 0;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.controls-row > button {
+  flex: 0 0 auto;
+}
+
+.panel-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.table-scroll {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: auto;
+  max-height: 320px;
+}
+
+.panel-pre {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.7rem;
+  margin: 0;
+  background: rgba(15, 138, 157, 0.04);
+  max-height: 320px;
+  white-space: pre-wrap;
+}
+
+.panel-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.panel-files .table-scroll,
+.panel-storage .table-scroll {
+  max-height: 300px;
+}
+
+#drop-zone {
+  border: 2px dashed var(--line);
+  border-radius: 10px;
+  padding: 0.8rem;
+  text-align: center;
+  color: var(--muted);
+  transition: opacity 0.15s ease;
+}
+
+#files-table td:last-child,
+#services-table td:last-child {
+  white-space: nowrap;
+}
+
+@media (max-width: 1580px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(3, minmax(280px, 1fr));
+  }
+}
+
+@media (max-width: 1220px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(2, minmax(280px, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-panel {
+    min-height: 420px;
+  }
+  .controls-row {
+    flex-wrap: wrap;
+  }
 }
 
 @media (max-width: 920px) {

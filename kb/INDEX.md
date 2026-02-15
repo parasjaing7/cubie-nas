@@ -34,7 +34,10 @@
 
 | Date | Category | File | Title | Tags |
 |------|----------|------|-------|------|
-| — | — | — | *No entries yet* | — |
+| 2026-02-15 | tools | `kb/tools/2026-02-15_dashboard_ui_layout_standard.md` | Dashboard UI layout standard for Cubie NAS (OpenMediaVault/router style) | dashboard, css-grid, responsive, overflow |
+| 2026-02-15 | storage | `kb/storage/2026-02-15_atomic_copy_preserve_permissions.md` | Preserve file permissions in atomic backup/restore copy path | atomic-copy, permissions, backup, restore |
+| 2026-02-15 | storage | `kb/storage/2026-02-15_cross_worker_provision_file_lock.md` | Add filesystem advisory lock to prevent cross-worker concurrent provisioning | provisioning, concurrency, flock |
+| 2026-02-15 | services | `kb/services/2026-02-15_jwt_secret_startup_guard.md` | Fail fast on insecure default JWT secret at application startup | jwt, security, startup, env |
 
 ---
 

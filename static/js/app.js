@@ -199,28 +199,16 @@ async function listPlugins() {
   document.getElementById('bonus-box').textContent = JSON.stringify(data.data, null, 2);
 }
 
-document.getElementById('logout-btn').addEventListener('click', async () => {
-  await api('/api/auth/logout', { method: 'POST' });
-  location.href = '/';
-});
-
-document.getElementById('theme-toggle').addEventListener('click', () => {
-  document.body.classList.toggle('dark');
-  localStorage.setItem('theme-dark', document.body.classList.contains('dark') ? '1' : '0');
-});
-
-if (localStorage.getItem('theme-dark') === '1') {
-  document.body.classList.add('dark');
-}
-
 const dz = document.getElementById('drop-zone');
-dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.style.opacity = 0.7; });
-dz.addEventListener('dragleave', () => { dz.style.opacity = 1; });
-dz.addEventListener('drop', async (e) => {
-  e.preventDefault();
-  dz.style.opacity = 1;
-  await uploadFiles(e.dataTransfer.files);
-});
+if (dz) {
+  dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.style.opacity = 0.7; });
+  dz.addEventListener('dragleave', () => { dz.style.opacity = 1; });
+  dz.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    dz.style.opacity = 1;
+    await uploadFiles(e.dataTransfer.files);
+  });
+}
 
 wsMonitor();
 loadDrives();
