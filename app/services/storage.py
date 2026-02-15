@@ -4,15 +4,17 @@ import json
 
 import psutil
 
-from .system_cmd import run_cmd
+from .system_cmd import RealCommandRunner
+
+_runner = RealCommandRunner()
 
 
 async def list_drives() -> list[dict]:
-    rc, out, _ = await run_cmd(['lsblk', '-J', '-o', 'NAME,KNAME,TYPE,SIZE,FSTYPE,MOUNTPOINT,MODEL,TRAN'])
-    if rc != 0 or not out:
+    result = await _runner.run(['lsblk', '-J', '-o', 'NAME,KNAME,TYPE,SIZE,FSTYPE,MOUNTPOINT,MODEL,TRAN'])
+    if result.exit_code != 0 or not result.stdout:
         return []
 
-    data = json.loads(out)
+    data = json.loads(result.stdout)
     drives: list[dict] = []
 
     def walk(devs: list[dict]):
@@ -50,10 +52,10 @@ async def list_drives() -> list[dict]:
 
 
 async def smart_status(device: str) -> str:
-    rc, out, err = await run_cmd(['smartctl', '-H', device])
-    if rc != 0:
-        return f'unsupported ({err[:120]})' if err else 'unsupported'
-    for line in out.splitlines():
+    result = await _runner.run(['smartctl', '-H', device])
+    if result.exit_code != 0:
+        return f'unsupported ({result.stderr[:120]})' if result.stderr else 'unsupported'
+    for line in result.stdout.splitlines():
         if 'SMART overall-health self-assessment test result' in line:
             return line.split(':', 1)[-1].strip()
         if 'SMART Health Status' in line:

@@ -7,18 +7,20 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..config import settings
 from ..deps import enforce_csrf, require_admin
 from ..schemas import ApiResponse
-from ..services.system_cmd import run_cmd
+from ..services.system_cmd import RealCommandRunner
 
 router = APIRouter(prefix='/api/bonus', tags=['bonus'])
+
+_runner = RealCommandRunner()
 
 
 @router.get('/docker/containers')
 async def docker_list(_: object = Depends(require_admin)):
-    rc, out, err = await run_cmd(['docker', 'ps', '-a', '--format', '{{.ID}} {{.Names}} {{.Status}}'])
-    if rc != 0:
-        raise HTTPException(status_code=400, detail=err or out)
+    result = await _runner.run(['docker', 'ps', '-a', '--format', '{{.ID}} {{.Names}} {{.Status}}'])
+    if result.exit_code != 0:
+        raise HTTPException(status_code=400, detail=result.stderr or result.stdout)
     rows = []
-    for line in out.splitlines():
+    for line in result.stdout.splitlines():
         parts = line.split(' ', 2)
         if len(parts) == 3:
             rows.append({'id': parts[0], 'name': parts[1], 'status': parts[2]})
@@ -27,17 +29,17 @@ async def docker_list(_: object = Depends(require_admin)):
 
 @router.post('/docker/start', dependencies=[Depends(enforce_csrf)])
 async def docker_start(container: str, _: object = Depends(require_admin)):
-    rc, out, err = await run_cmd(['docker', 'start', container])
-    if rc != 0:
-        raise HTTPException(status_code=400, detail=err or out)
+    result = await _runner.run(['docker', 'start', container])
+    if result.exit_code != 0:
+        raise HTTPException(status_code=400, detail=result.stderr or result.stdout)
     return ApiResponse(ok=True, message='Container started')
 
 
 @router.post('/docker/stop', dependencies=[Depends(enforce_csrf)])
 async def docker_stop(container: str, _: object = Depends(require_admin)):
-    rc, out, err = await run_cmd(['docker', 'stop', container])
-    if rc != 0:
-        raise HTTPException(status_code=400, detail=err or out)
+    result = await _runner.run(['docker', 'stop', container])
+    if result.exit_code != 0:
+        raise HTTPException(status_code=400, detail=result.stderr or result.stdout)
     return ApiResponse(ok=True, message='Container stopped')
 
 
@@ -49,9 +51,9 @@ async def backup_run(src: str, dst: str, _: object = Depends(require_admin)):
     if root not in [src_path, *src_path.parents] or root not in [dst_path, *dst_path.parents]:
         raise HTTPException(status_code=400, detail='Path outside NAS root')
 
-    rc, out, err = await run_cmd(['rsync', '-aH', '--delete', f'{src_path}/', f'{dst_path}/'])
-    if rc != 0:
-        raise HTTPException(status_code=400, detail=err or out)
+    result = await _runner.run(['rsync', '-aH', '--delete', f'{src_path}/', f'{dst_path}/'])
+    if result.exit_code != 0:
+        raise HTTPException(status_code=400, detail=result.stderr or result.stdout)
     return ApiResponse(ok=True, message='Backup completed')
 
 

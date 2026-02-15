@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .system_cmd import run_cmd
+from .system_cmd import RealCommandRunner
+
+_runner = RealCommandRunner()
 
 
 async def ensure_self_signed(cert_file: str, key_file: str, cn: str = 'cubie-nas.local') -> tuple[int, str]:
@@ -13,7 +15,7 @@ async def ensure_self_signed(cert_file: str, key_file: str, cn: str = 'cubie-nas
     if cert.exists() and key.exists():
         return 0, 'TLS certificate already exists'
 
-    rc, out, err = await run_cmd(
+    result = await _runner.run(
         [
             'openssl',
             'req',
@@ -31,6 +33,6 @@ async def ensure_self_signed(cert_file: str, key_file: str, cn: str = 'cubie-nas
             cert_file,
         ]
     )
-    if rc != 0:
-        return rc, err or out
+    if result.exit_code != 0:
+        return result.exit_code, result.stderr or result.stdout
     return 0, 'TLS certificate generated'

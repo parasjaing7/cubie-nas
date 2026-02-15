@@ -147,3 +147,4 @@ sudo ufw status verbose
 - Storage formatting/mount/system service operations require root service execution.
 - App runs with `MemoryMax=300M` in `systemd/cubie-nas.service`.
 - Snapshot support depends on filesystem (btrfs/zfs) and is not enabled by default.
+

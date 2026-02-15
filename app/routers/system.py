@@ -7,9 +7,11 @@ from ..deps import enforce_csrf, get_current_user, require_admin
 from ..schemas import ApiResponse
 from ..services.system_info import get_general_info
 from ..services.ssl import ensure_self_signed
-from ..services.system_cmd import run_cmd
+from ..services.system_cmd import RealCommandRunner
 
 router = APIRouter(prefix='/api/system', tags=['system'])
+
+_runner = RealCommandRunner()
 
 
 @router.get('/general-info')
@@ -50,7 +52,7 @@ async def firewall_apply(_: object = Depends(require_admin)):
         ['ufw', 'allow', '8443/tcp'],
         ['ufw', '--force', 'enable'],
     ]:
-        rc, out, err = await run_cmd(cmd)
-        if rc != 0:
-            raise HTTPException(status_code=400, detail=err or out)
+        result = await _runner.run(cmd)
+        if result.exit_code != 0:
+            raise HTTPException(status_code=400, detail=result.stderr or result.stdout)
     return ApiResponse(ok=True, message='Firewall configured')

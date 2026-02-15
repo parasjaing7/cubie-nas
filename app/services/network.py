@@ -5,7 +5,9 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from .system_cmd import run_cmd
+from .system_cmd import RealCommandRunner
+
+_runner = RealCommandRunner()
 
 
 def _mask_from_cidr(cidr: str) -> tuple[str, str]:
@@ -14,19 +16,19 @@ def _mask_from_cidr(cidr: str) -> tuple[str, str]:
 
 
 async def _has_nmcli() -> bool:
-    rc, _, _ = await run_cmd(['which', 'nmcli'])
-    return rc == 0
+    result = await _runner.run(['which', 'nmcli'])
+    return result.exit_code == 0
 
 
 async def current_network_info() -> dict:
-    rc, out, _ = await run_cmd(['ip', '-j', 'addr', 'show'])
-    interfaces = json.loads(out) if rc == 0 and out else []
+    result = await _runner.run(['ip', '-j', 'addr', 'show'])
+    interfaces = json.loads(result.stdout) if result.exit_code == 0 and result.stdout else []
 
-    rc2, route_out, _ = await run_cmd(['ip', 'route', 'show', 'default'])
+    result_route = await _runner.run(['ip', 'route', 'show', 'default'])
     default_iface = None
     gateway = None
-    if rc2 == 0 and route_out:
-        parts = route_out.split()
+    if result_route.exit_code == 0 and result_route.stdout:
+        parts = result_route.stdout.split()
         if 'dev' in parts:
             default_iface = parts[parts.index('dev') + 1]
         if 'via' in parts:
@@ -56,10 +58,10 @@ async def current_network_info() -> dict:
 
 
 async def _active_connection_for_iface(interface: str) -> Optional[str]:
-    rc, out, _ = await run_cmd(['nmcli', '-t', '-f', 'NAME,DEVICE', 'connection', 'show'])
-    if rc != 0:
+    result = await _runner.run(['nmcli', '-t', '-f', 'NAME,DEVICE', 'connection', 'show'])
+    if result.exit_code != 0:
         return None
-    for line in out.splitlines():
+    for line in result.stdout.splitlines():
         if not line.strip() or ':' not in line:
             continue
         name, device = line.split(':', 1)
@@ -98,9 +100,9 @@ async def apply_network_config(interface: str, mode: str, address: Optional[str]
             ]
 
         for cmd in cmds:
-            rc, out, err = await run_cmd(cmd)
-            if rc != 0:
-                return False, err or out
+            result_cmd = await _runner.run(cmd)
+            if result_cmd.exit_code != 0:
+                return False, result_cmd.stderr or result_cmd.stdout
         return True, 'Network configuration applied with NetworkManager'
 
     cfg_path = Path(f'/etc/network/interfaces.d/cubie-nas-{interface}.cfg')
@@ -124,8 +126,8 @@ async def apply_network_config(interface: str, mode: str, address: Optional[str]
 
     cfg_path.write_text(content)
 
-    rc, out, err = await run_cmd(['systemctl', 'restart', 'networking'])
-    if rc != 0:
-        return False, (err or out or 'Saved configuration, but restart networking failed')
+    result_restart = await _runner.run(['systemctl', 'restart', 'networking'])
+    if result_restart.exit_code != 0:
+        return False, (result_restart.stderr or result_restart.stdout or 'Saved configuration, but restart networking failed')
 
     return True, f'Network configuration saved in {cfg_path}'

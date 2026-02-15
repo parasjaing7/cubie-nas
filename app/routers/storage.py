@@ -5,10 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from ..deps import enforce_csrf, get_current_user, require_admin
 from ..schemas import ApiResponse, DriveFormatRequest, MountRequest, UsbShareRequest
 from ..services.storage import list_drives, smart_status
-from ..services.system_cmd import run_cmd
+from ..services.system_cmd import RealCommandRunner
 from ..services.usb_share import provision_nvme_share, provision_usb_share
 
 router = APIRouter(prefix='/api/storage', tags=['storage'])
+
+_runner = RealCommandRunner()
 
 
 @router.get('/drives')
@@ -22,17 +24,17 @@ async def drives(include_smart: bool = Query(default=False), _=Depends(get_curre
 
 @router.post('/mount', dependencies=[Depends(enforce_csrf)])
 async def mount_drive(payload: MountRequest, _=Depends(require_admin)):
-    rc, out, err = await run_cmd(['mount', payload.device, payload.mountpoint])
-    if rc != 0:
-        raise HTTPException(status_code=400, detail=err or out)
+    result = await _runner.run(['mount', payload.device, payload.mountpoint])
+    if result.exit_code != 0:
+        raise HTTPException(status_code=400, detail=result.stderr or result.stdout)
     return ApiResponse(ok=True, message='Mounted')
 
 
 @router.post('/unmount', dependencies=[Depends(enforce_csrf)])
 async def unmount_drive(payload: MountRequest, _=Depends(require_admin)):
-    rc, out, err = await run_cmd(['umount', payload.device])
-    if rc != 0:
-        raise HTTPException(status_code=400, detail=err or out)
+    result = await _runner.run(['umount', payload.device])
+    if result.exit_code != 0:
+        raise HTTPException(status_code=400, detail=result.stderr or result.stdout)
     return ApiResponse(ok=True, message='Unmounted')
 
 
@@ -44,9 +46,9 @@ async def format_drive(payload: DriveFormatRequest, _=Depends(require_admin)):
     if payload.fs_type != 'ext4':
         raise HTTPException(status_code=400, detail='Only ext4 is supported for NAS usage')
 
-    rc, out, err = await run_cmd(['mkfs.ext4', '-F', payload.device])
-    if rc != 0:
-        raise HTTPException(status_code=400, detail=err or out)
+    result = await _runner.run(['mkfs.ext4', '-F', payload.device])
+    if result.exit_code != 0:
+        raise HTTPException(status_code=400, detail=result.stderr or result.stdout)
     return ApiResponse(ok=True, message=f'Formatted {payload.device} as ext4')
 
 

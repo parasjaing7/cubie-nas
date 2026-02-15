@@ -11,10 +11,12 @@ from ..deps import enforce_csrf, get_current_user, require_admin
 from ..models import User
 from ..schemas import ApiResponse, PasswordChangeRequest, UserCreate, UserOut
 from ..security import hash_password
-from ..services.system_cmd import run_cmd
+from ..services.system_cmd import RealCommandRunner
 from ..services.user_ctl import active_sessions, create_system_user, set_system_password
 
 router = APIRouter(prefix='/api/users', tags=['users'])
+
+_runner = RealCommandRunner()
 
 
 @router.get('/app', response_model=list[UserOut])
@@ -65,12 +67,12 @@ async def set_folder_permissions(username: str, path: str, mode: str = '770', _:
     if Path(settings.nas_root).resolve() not in [full, *full.parents]:
         raise HTTPException(status_code=400, detail='Invalid path')
 
-    rc1, _, err1 = await run_cmd(['chown', '-R', f'{username}:{username}', str(full)])
-    if rc1 != 0:
-        raise HTTPException(status_code=400, detail=err1)
-    rc2, _, err2 = await run_cmd(['chmod', '-R', mode, str(full)])
-    if rc2 != 0:
-        raise HTTPException(status_code=400, detail=err2)
+    result_chown = await _runner.run(['chown', '-R', f'{username}:{username}', str(full)])
+    if result_chown.exit_code != 0:
+        raise HTTPException(status_code=400, detail=result_chown.stderr or result_chown.stdout)
+    result_chmod = await _runner.run(['chmod', '-R', mode, str(full)])
+    if result_chmod.exit_code != 0:
+        raise HTTPException(status_code=400, detail=result_chmod.stderr or result_chmod.stdout)
     return ApiResponse(ok=True, message='Permissions updated')
 
 

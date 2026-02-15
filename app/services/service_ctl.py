@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from .system_cmd import run_cmd
+from .system_cmd import RealCommandRunner
+
+_runner = RealCommandRunner()
 
 SERVICE_MAP = {
     'samba': 'smbd',
@@ -14,7 +16,8 @@ async def service_action(name: str, action: str) -> tuple[int, str, str]:
     unit = SERVICE_MAP.get(name)
     if not unit:
         return 1, '', f'Unknown service {name}'
-    return await run_cmd(['systemctl', action, unit])
+    result = await _runner.run(['systemctl', action, unit])
+    return result.exit_code, result.stdout, result.stderr
 
 
 async def service_status(name: str) -> dict:
@@ -22,11 +25,11 @@ async def service_status(name: str) -> dict:
     if not unit:
         return {'service': name, 'enabled': False, 'active': False}
 
-    rc_e, out_e, _ = await run_cmd(['systemctl', 'is-enabled', unit])
-    rc_a, out_a, _ = await run_cmd(['systemctl', 'is-active', unit])
+    result_e = await _runner.run(['systemctl', 'is-enabled', unit])
+    result_a = await _runner.run(['systemctl', 'is-active', unit])
     return {
         'service': name,
         'unit': unit,
-        'enabled': rc_e == 0 and out_e == 'enabled',
-        'active': rc_a == 0 and out_a == 'active',
+        'enabled': result_e.exit_code == 0 and result_e.stdout == 'enabled',
+        'active': result_a.exit_code == 0 and result_a.stdout == 'active',
     }

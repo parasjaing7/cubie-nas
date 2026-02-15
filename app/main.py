@@ -54,7 +54,7 @@ def startup():
 @app.get('/', response_class=HTMLResponse)
 def root(request: Request):
     if request.cookies.get('access_token'):
-        return RedirectResponse('/general')
+        return RedirectResponse('/dashboard')
     return templates.TemplateResponse('login.html', {'request': request})
 
 
@@ -62,7 +62,7 @@ def root(request: Request):
 def dashboard(request: Request):
     if not request.cookies.get('access_token'):
         return RedirectResponse('/')
-    return RedirectResponse('/general')
+    return templates.TemplateResponse('dashboard.html', {'request': request})
 
 
 def _require_login(request: Request):
