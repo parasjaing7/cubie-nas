@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% set page = 'terminal' %}
+
+{% block title %}Terminal{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
+<style>
+  #terminal-root {
+    height: calc(100vh - 210px);
+    min-height: 380px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 0.5rem;
+    background: #000;
+  }
+  #terminal-status {
+    margin-bottom: 0.75rem;
+  }
+</style>
+
+<section class="panel" style="grid-column: 1 / -1;">
+  <h3 style="margin-top:0;">Power Terminal</h3>
+  <p class="muted" id="terminal-status">Connecting...</p>
+  <div id="terminal-root"></div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<script>
+  (function initTerminal() {
+    const statusEl = document.getElementById('terminal-status');
+    const root = document.getElementById('terminal-root');
+    if (!root) return;
+
+    const term = new Terminal({
+      cursorBlink: true,
+      scrollback: 1000,
+      convertEol: true,
+      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace",
+      theme: { background: '#000000' },
+    });
+    const fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(root);
+    fitAddon.fit();
+
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/ws/terminal`);
+
+    ws.onopen = () => {
+      if (statusEl) statusEl.textContent = 'Connected';
+      term.focus();
+      fitAddon.fit();
+    };
+
+    ws.onmessage = (event) => {
+      term.write(event.data);
+    };
+
+    ws.onerror = () => {
+      if (statusEl) statusEl.textContent = 'Session limit reached';
+      window.toast('Session limit reached', 'warning');
+    };
+
+    ws.onclose = () => {
+      if (statusEl && statusEl.textContent !== 'Connected') {
+        statusEl.textContent = 'Session limit reached';
+      } else if (statusEl) {
+        statusEl.textContent = 'Disconnected';
+      }
+    };
+
+    term.onData((data) => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(data);
+    });
+
+    window.addEventListener('resize', () => {
+      fitAddon.fit();
+    });
+
+    window.addEventListener('beforeunload', () => {
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
+      }
+    });
+  })();
+</script>
+{% endblock %}

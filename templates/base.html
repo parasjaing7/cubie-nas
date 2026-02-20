@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Cubie NAS</title>
-  <link rel="stylesheet" href="/static/css/router.css?v=20260215b" />
+  <link rel="stylesheet" href="/static/css/style.css?v=20260220a" />
 </head>
 <body data-page="{{ page }}">
   <div class="layout">
@@ -18,37 +18,25 @@
       </div>
       <nav>
         <div class="nav-group">
-          <p class="nav-group-title">System</p>
+          <p class="nav-group-title">Consumer</p>
           <a href="/overview" class="nav-link {% if page == 'overview' %}active{% endif %}">Dashboard</a>
-          <a href="/general" class="nav-link {% if page == 'general' %}active{% endif %}">General Info</a>
-          <a href="/services" class="nav-link {% if page == 'services' %}active{% endif %}">Services</a>
-          <a href="/logs" class="nav-link {% if page == 'logs' %}active{% endif %}">Logs</a>
-        </div>
-
-        <div class="nav-group">
-          <p class="nav-group-title">Storage</p>
-          <a href="/storage" class="nav-link {% if page == 'storage' %}active{% endif %}">Connected Drives</a>
-        </div>
-
-        <div class="nav-group">
-          <p class="nav-group-title">Sharing</p>
-          <a href="/nas" class="nav-link {% if page == 'nas' %}active{% endif %}">NAS Management</a>
-        </div>
-
-        <div class="nav-group">
-          <p class="nav-group-title">Access</p>
+          <a href="/files" class="nav-link {% if page == 'files' %}active{% endif %}">Files</a>
+          <a href="/nas" class="nav-link {% if page == 'nas' %}active{% endif %}">Sharing</a>
           <a href="/users" class="nav-link {% if page == 'users' %}active{% endif %}">Users</a>
-        </div>
-
-        <div class="nav-group">
-          <p class="nav-group-title">Network</p>
-          <a href="/network" class="nav-link {% if page == 'network' %}active{% endif %}">Network</a>
-        </div>
-
-        <div class="nav-group">
-          <p class="nav-group-title">Tools</p>
-          <a href="/files" class="nav-link {% if page == 'files' %}active{% endif %}">File Manager</a>
           <a href="/settings" class="nav-link {% if page == 'settings' %}active{% endif %}">Settings</a>
+        </div>
+
+        <button type="button" class="advanced-toggle" id="advanced-toggle" aria-expanded="false" aria-controls="advanced-nav">
+          <span>Advanced</span>
+          <span id="advanced-chevron">▸</span>
+        </button>
+
+        <div class="nav-group advanced-nav" id="advanced-nav" hidden>
+          <a href="/terminal" class="nav-link {% if page == 'terminal' %}active{% endif %}">Terminal ⚡</a>
+          <a href="/logs" class="nav-link {% if page == 'logs' %}active{% endif %}">Logs ⚡</a>
+          <a href="/storage" class="nav-link {% if page == 'storage' %}active{% endif %}">Storage ⚡</a>
+          <a href="/services" class="nav-link {% if page == 'services' %}active{% endif %}">Services ⚡</a>
+          <a href="/services" class="nav-link">Docker ⚡</a>
         </div>
       </nav>
       <div class="side-actions">
@@ -66,6 +54,111 @@
       </main>
     </section>
   </div>
-  <script src="/static/js/router.js?v=20260215b"></script>
+  <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+  <script>
+    function cookie(name) {
+      const m = document.cookie.match('(^|;)\\s*' + name + '=([^;]+)');
+      return m ? m.pop() : '';
+    }
+
+    window.toast = function toast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      if (!container || !message) return;
+      const item = document.createElement('div');
+      item.className = `toast toast-${type}`;
+      item.textContent = String(message);
+      container.appendChild(item);
+      setTimeout(() => {
+        item.classList.add('toast-hide');
+        setTimeout(() => item.remove(), 220);
+      }, 4000);
+    };
+
+    window.api = async function api(path, options = {}) {
+      const req = { ...options };
+      req.headers = req.headers || {};
+      const method = String(req.method || 'GET').toUpperCase();
+      if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+        req.headers['X-CSRF-Token'] = cookie('csrf_token');
+      }
+
+      const response = await fetch(path, req);
+      if (response.status === 401) {
+        window.location.href = '/';
+        throw new Error('Session expired. Please log in again.');
+      }
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const msg = payload.detail || payload.message || 'Request failed';
+        window.toast(msg, 'error');
+        throw new Error(msg);
+      }
+      return payload;
+    };
+
+    window.createReconnectingWebSocket = function createReconnectingWebSocket(url, handlers = {}) {
+      let socket = null;
+      let reconnectTimer = null;
+      let delayMs = 1000;
+      let closedManually = false;
+
+      const connect = () => {
+        socket = new WebSocket(url);
+
+        socket.onopen = (event) => {
+          delayMs = 1000;
+          if (handlers.onopen) handlers.onopen(event, socket);
+        };
+        socket.onmessage = (event) => {
+          if (handlers.onmessage) handlers.onmessage(event, socket);
+        };
+        socket.onerror = (event) => {
+          if (handlers.onerror) handlers.onerror(event, socket);
+        };
+        socket.onclose = (event) => {
+          if (handlers.onclose) handlers.onclose(event, socket);
+          if (closedManually) return;
+          reconnectTimer = setTimeout(connect, delayMs);
+          delayMs = Math.min(delayMs * 2, 30000);
+        };
+      };
+
+      connect();
+
+      return {
+        close() {
+          closedManually = true;
+          if (reconnectTimer) clearTimeout(reconnectTimer);
+          if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+            socket.close();
+          }
+        },
+        send(data) {
+          if (socket && socket.readyState === WebSocket.OPEN) socket.send(data);
+        },
+      };
+    };
+
+    (function initAdvancedNav() {
+      const toggle = document.getElementById('advanced-toggle');
+      const nav = document.getElementById('advanced-nav');
+      const chevron = document.getElementById('advanced-chevron');
+      if (!toggle || !nav || !chevron) return;
+
+      const setExpanded = (expanded) => {
+        nav.hidden = !expanded;
+        toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        chevron.textContent = expanded ? '▾' : '▸';
+      };
+
+      setExpanded(false);
+      toggle.addEventListener('click', () => {
+        const expanded = toggle.getAttribute('aria-expanded') === 'true';
+        setExpanded(!expanded);
+      });
+    })();
+  </script>
+  <script src="/static/js/router.js?v=20260220a"></script>
 </body>
 </html>

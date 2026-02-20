@@ -1,21 +1,13 @@
 from __future__ import annotations
 
-import asyncio
-
 from .system_cmd import RealCommandRunner
 
 _runner = RealCommandRunner()
 
 
 async def _chpasswd(username: str, password: str) -> tuple[int, str, str]:
-    proc = await asyncio.create_subprocess_exec(
-        'chpasswd',
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    out, err = await proc.communicate(f'{username}:{password}'.encode())
-    return proc.returncode, out.decode().strip(), err.decode().strip()
+    result = await _runner.run(['chpasswd'], input_text=f'{username}:{password}\n')
+    return result.exit_code, result.stdout, result.stderr
 
 
 async def create_system_user(username: str, password: str) -> tuple[int, str, str]:

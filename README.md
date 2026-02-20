@@ -38,9 +38,9 @@ cubie-nas/
     install.sh
   static/
     css/style.css
-    js/app.js
+    js/router.js
   templates/
-    dashboard.html
+    overview.html
     login.html
   systemd/
     cubie-nas.service

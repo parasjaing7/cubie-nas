@@ -1,0 +1,184 @@
+{% extends 'base.html' %}
+{% set page = 'logs' %}
+
+{% block title %}Logs{% endblock %}
+
+{% block content %}
+<style>
+  .logs-toolbar {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 0.6rem;
+    align-items: center;
+    margin-bottom: 0.75rem;
+  }
+  .unit-pills {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+  }
+  .unit-pill {
+    padding: 0.25rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .unit-pill.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  #logs-stream {
+    height: calc(100vh - 300px);
+    min-height: 340px;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 0.55rem;
+    background: #000;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .log-line { white-space: pre-wrap; color: #f8fafc; }
+  .log-ERROR { color: #ef4444; }
+  .log-WARN { color: #f59e0b; }
+  .log-INFO { color: #ffffff; }
+  .log-DEBUG { color: #94a3b8; }
+</style>
+
+<section class="panel" style="grid-column: 1 / -1;">
+  <h3 style="margin-top:0;">Unified Service Logs</h3>
+  <p class="muted" id="logs-status">Connecting...</p>
+
+  <div class="logs-toolbar">
+    <input id="logs-filter" placeholder="Filter visible lines..." />
+    <button type="button" id="logs-clear">Clear display</button>
+    <button type="button" id="logs-scroll-toggle">Pause scroll</button>
+  </div>
+
+  <div class="unit-pills" id="unit-pills"></div>
+
+  <div id="logs-stream"></div>
+</section>
+
+<script>
+  (function initLogsPage() {
+    const streamEl = document.getElementById('logs-stream');
+    const statusEl = document.getElementById('logs-status');
+    const filterEl = document.getElementById('logs-filter');
+    const clearBtn = document.getElementById('logs-clear');
+    const scrollBtn = document.getElementById('logs-scroll-toggle');
+    const pillsEl = document.getElementById('unit-pills');
+
+    if (!streamEl || !statusEl || !filterEl || !clearBtn || !scrollBtn || !pillsEl) return;
+
+    const units = new Set();
+    const hiddenUnits = new Set();
+    const lines = [];
+    let autoScroll = true;
+
+    function renderPills() {
+      pillsEl.innerHTML = '';
+      Array.from(units).sort().forEach((unit) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = `unit-pill ${hiddenUnits.has(unit) ? '' : 'active'}`;
+        b.textContent = unit;
+        b.addEventListener('click', () => {
+          if (hiddenUnits.has(unit)) hiddenUnits.delete(unit);
+          else hiddenUnits.add(unit);
+          renderPills();
+          renderLines();
+        });
+        pillsEl.appendChild(b);
+      });
+    }
+
+    function renderLines() {
+      const query = filterEl.value.trim().toLowerCase();
+      const frag = document.createDocumentFragment();
+
+      for (const entry of lines) {
+        if (hiddenUnits.has(entry.unit)) continue;
+        const plain = `${entry.ts} ${entry.unit} ${entry.level} ${entry.msg}`.toLowerCase();
+        if (query && !plain.includes(query)) continue;
+
+        const row = document.createElement('div');
+        row.className = `log-line log-${entry.level}`;
+        row.textContent = `[${entry.ts || '--'}] [${entry.unit}] [${entry.level}] ${entry.msg}`;
+        frag.appendChild(row);
+      }
+
+      streamEl.innerHTML = '';
+      streamEl.appendChild(frag);
+      if (autoScroll) {
+        streamEl.scrollTop = streamEl.scrollHeight;
+      }
+    }
+
+    function appendLine(entry) {
+      if (lines.length >= 500) lines.shift();
+      lines.push(entry);
+      units.add(entry.unit || 'journalctl');
+      renderPills();
+      renderLines();
+    }
+
+    streamEl.addEventListener('mouseenter', () => {
+      autoScroll = false;
+      scrollBtn.textContent = 'Resume scroll';
+    });
+
+    scrollBtn.addEventListener('click', () => {
+      autoScroll = !autoScroll;
+      scrollBtn.textContent = autoScroll ? 'Pause scroll' : 'Resume scroll';
+      if (autoScroll) streamEl.scrollTop = streamEl.scrollHeight;
+    });
+
+    filterEl.addEventListener('input', renderLines);
+
+    clearBtn.addEventListener('click', () => {
+      lines.length = 0;
+      streamEl.innerHTML = '';
+      statusEl.textContent = 'Display cleared (stream still active)';
+    });
+
+    streamEl.addEventListener('click', () => {
+      autoScroll = true;
+      scrollBtn.textContent = 'Pause scroll';
+      streamEl.scrollTop = streamEl.scrollHeight;
+    });
+
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/ws/logs`);
+
+    ws.onopen = () => {
+      statusEl.textContent = 'Streaming live logs';
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const parsed = JSON.parse(event.data);
+        appendLine(parsed);
+      } catch (_) {
+        appendLine({ ts: '', unit: 'journalctl', level: 'INFO', msg: String(event.data) });
+      }
+    };
+
+    ws.onerror = () => {
+      statusEl.textContent = 'Session limit reached';
+      window.toast('Session limit reached', 'warning');
+    };
+
+    ws.onclose = () => {
+      if (statusEl.textContent !== 'Session limit reached') {
+        statusEl.textContent = 'Disconnected';
+      }
+    };
+  })();
+</script>
+{% endblock %}

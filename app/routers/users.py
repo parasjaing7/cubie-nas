@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
-from ..deps import enforce_csrf, get_current_user, require_admin
+from ..deps import get_current_user, require_admin
 from ..models import User
 from ..schemas import ApiResponse, PasswordChangeRequest, UserCreate, UserOut
 from ..security import hash_password
@@ -24,7 +24,7 @@ def list_app_users(_: User = Depends(require_admin), db: Session = Depends(get_d
     return db.query(User).all()
 
 
-@router.post('/app', response_model=UserOut, dependencies=[Depends(enforce_csrf)])
+@router.post('/app', response_model=UserOut)
 def create_app_user(payload: UserCreate, _: User = Depends(require_admin), db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == payload.username).first():
         raise HTTPException(status_code=400, detail='User exists')
@@ -35,7 +35,7 @@ def create_app_user(payload: UserCreate, _: User = Depends(require_admin), db: S
     return user
 
 
-@router.post('/app/password', dependencies=[Depends(enforce_csrf)])
+@router.post('/app/password')
 def change_app_password(payload: PasswordChangeRequest, _: User = Depends(require_admin), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == payload.username).first()
     if not user:
@@ -45,7 +45,7 @@ def change_app_password(payload: PasswordChangeRequest, _: User = Depends(requir
     return ApiResponse(ok=True, message='Password changed')
 
 
-@router.post('/system/create', dependencies=[Depends(enforce_csrf)])
+@router.post('/system/create')
 async def create_linux_user(payload: UserCreate, _: User = Depends(require_admin)):
     rc, out, err = await create_system_user(payload.username, payload.password)
     if rc != 0:
@@ -53,7 +53,7 @@ async def create_linux_user(payload: UserCreate, _: User = Depends(require_admin
     return ApiResponse(ok=True, message='System user created')
 
 
-@router.post('/system/password', dependencies=[Depends(enforce_csrf)])
+@router.post('/system/password')
 async def set_linux_user_password(payload: PasswordChangeRequest, _: User = Depends(require_admin)):
     rc, out, err = await set_system_password(payload.username, payload.new_password)
     if rc != 0:
@@ -61,7 +61,7 @@ async def set_linux_user_password(payload: PasswordChangeRequest, _: User = Depe
     return ApiResponse(ok=True, message='System password changed')
 
 
-@router.post('/permissions', dependencies=[Depends(enforce_csrf)])
+@router.post('/permissions')
 async def set_folder_permissions(username: str, path: str, mode: str = '770', _: User = Depends(require_admin)):
     full = (Path(settings.nas_root) / path.lstrip('/')).resolve()
     if Path(settings.nas_root).resolve() not in [full, *full.parents]:

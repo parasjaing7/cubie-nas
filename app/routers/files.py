@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from ..config import settings
-from ..deps import enforce_csrf, get_current_user
+from ..deps import get_current_user
 from ..schemas import ApiResponse, FileActionRequest, MkdirRequest
 from ..services.file_ops import FileOps
 
@@ -33,7 +33,7 @@ def list_files(
     return {'ok': True, 'data': items}
 
 
-@router.post('/upload', dependencies=[Depends(enforce_csrf)])
+@router.post('/upload')
 async def upload(path: str = Query(default=''), file: UploadFile = File(...), _=Depends(get_current_user)):
     try:
         target_dir = ops.safe_path(path)
@@ -59,7 +59,7 @@ def download(path: str = Query(...), _=Depends(get_current_user)):
     return FileResponse(target, filename=target.name)
 
 
-@router.post('/mkdir', dependencies=[Depends(enforce_csrf)])
+@router.post('/mkdir')
 def mkdir(payload: MkdirRequest, _=Depends(get_current_user)):
     try:
         ops.mkdir(payload.path, payload.name)
@@ -68,7 +68,7 @@ def mkdir(payload: MkdirRequest, _=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.post('/rename', dependencies=[Depends(enforce_csrf)])
+@router.post('/rename')
 def rename(payload: FileActionRequest, _=Depends(get_current_user)):
     if not payload.new_name:
         raise HTTPException(status_code=400, detail='new_name is required')
@@ -79,7 +79,7 @@ def rename(payload: FileActionRequest, _=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.post('/delete', dependencies=[Depends(enforce_csrf)])
+@router.post('/delete')
 def delete(payload: FileActionRequest, _=Depends(get_current_user)):
     try:
         full = ops.safe_path(payload.path)

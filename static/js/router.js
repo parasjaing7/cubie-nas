@@ -4,6 +4,9 @@ function cookie(name) {
 }
 
 async function api(url, options = {}) {
+  if (typeof window.api === 'function') {
+    return window.api(url, options);
+  }
   options.headers = options.headers || {};
   if (options.method && options.method !== 'GET') {
     options.headers['X-CSRF-Token'] = cookie('csrf_token');
@@ -19,6 +22,9 @@ async function api(url, options = {}) {
   }
   return res.json();
 }
+
+let generalWsController = null;
+let overviewWsController = null;
 
 function fmtBytes(v) {
   if (v == null) return '-';
@@ -258,19 +264,27 @@ async function loadGeneralPage() {
     document.getElementById('g-temp').textContent = d.temperature_c ? `${d.temperature_c.toFixed(1)} C` : 'N/A';
 
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${proto}://${location.host}/api/monitor/ws`);
-    ws.onmessage = (ev) => {
+    if (generalWsController) {
+      generalWsController.close();
+    }
+    generalWsController = window.createReconnectingWebSocket(`${proto}://${location.host}/api/monitor/ws`, {
+      onopen: () => {
+        const topState = document.getElementById('top-status');
+        if (topState) topState.textContent = 'Monitoring connected';
+      },
+      onmessage: (ev) => {
       const m = JSON.parse(ev.data);
       document.getElementById('live-cpu').textContent = `${m.cpu_percent}%`;
       document.getElementById('live-ram').textContent = `${m.ram_used_mb}/${m.ram_total_mb} MB`;
       document.getElementById('live-rx').textContent = `${fmtBytes(m.net_rx_bps)}/s`;
       document.getElementById('live-tx').textContent = `${fmtBytes(m.net_tx_bps)}/s`;
       document.getElementById('live-up').textContent = fmtUptime(m.uptime_seconds);
-    };
-    ws.onclose = () => {
-      document.getElementById('top-status').textContent = 'Reconnecting...';
-      setTimeout(loadGeneralPage, 2000);
-    };
+      },
+      onclose: () => {
+        const topState = document.getElementById('top-status');
+        if (topState) topState.textContent = 'Reconnecting monitor...';
+      },
+    });
     const top = document.getElementById('top-status');
     if (top) top.textContent = 'General info loaded';
     const stamp = document.getElementById('g-last-refresh');
@@ -343,14 +357,22 @@ async function loadOverviewPage() {
     document.getElementById('ov-uptime').textContent = '-';
 
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${proto}://${location.host}/api/monitor/ws`);
-    ws.onmessage = (ev) => {
+    if (overviewWsController) {
+      overviewWsController.close();
+    }
+    overviewWsController = window.createReconnectingWebSocket(`${proto}://${location.host}/api/monitor/ws`, {
+      onmessage: (ev) => {
       const m = JSON.parse(ev.data);
       document.getElementById('ov-cpu').textContent = `${m.cpu_percent}%`;
       document.getElementById('ov-ram').textContent = `${m.ram_used_mb}/${m.ram_total_mb} MB`;
       document.getElementById('ov-temp').textContent = m.temp_c ? `${m.temp_c.toFixed(1)} C` : 'N/A';
       document.getElementById('ov-uptime').textContent = fmtUptime(m.uptime_seconds);
-    };
+      },
+      onclose: () => {
+        const status = document.getElementById('top-status');
+        if (status) status.textContent = 'Reconnecting monitor...';
+      },
+    });
   } catch (err) {
     const status = document.getElementById('top-status');
     if (status) status.textContent = `Overview load failed: ${err.message}`;

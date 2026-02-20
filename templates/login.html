@@ -29,7 +29,7 @@
         body: JSON.stringify({ username: fd.get('username'), password: fd.get('password') })
       });
       if (res.ok) {
-        location.href = '/dashboard';
+        location.href = '/overview';
       } else {
         const data = await res.json();
         document.getElementById('login-error').textContent = data.detail || 'Login failed';

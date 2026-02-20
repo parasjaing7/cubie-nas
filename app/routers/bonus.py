@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..config import settings
-from ..deps import enforce_csrf, require_admin
+from ..deps import require_admin
 from ..schemas import ApiResponse
 from ..services.system_cmd import RealCommandRunner
 
@@ -27,7 +27,7 @@ async def docker_list(_: object = Depends(require_admin)):
     return {'ok': True, 'data': rows}
 
 
-@router.post('/docker/start', dependencies=[Depends(enforce_csrf)])
+@router.post('/docker/start')
 async def docker_start(container: str, _: object = Depends(require_admin)):
     result = await _runner.run(['docker', 'start', container])
     if result.exit_code != 0:
@@ -35,7 +35,7 @@ async def docker_start(container: str, _: object = Depends(require_admin)):
     return ApiResponse(ok=True, message='Container started')
 
 
-@router.post('/docker/stop', dependencies=[Depends(enforce_csrf)])
+@router.post('/docker/stop')
 async def docker_stop(container: str, _: object = Depends(require_admin)):
     result = await _runner.run(['docker', 'stop', container])
     if result.exit_code != 0:
@@ -43,7 +43,7 @@ async def docker_stop(container: str, _: object = Depends(require_admin)):
     return ApiResponse(ok=True, message='Container stopped')
 
 
-@router.post('/backup/run', dependencies=[Depends(enforce_csrf)])
+@router.post('/backup/run')
 async def backup_run(src: str, dst: str, _: object = Depends(require_admin)):
     src_path = (Path(settings.nas_root) / src.lstrip('/')).resolve()
     dst_path = (Path(settings.nas_root) / dst.lstrip('/')).resolve()

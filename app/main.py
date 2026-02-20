@@ -1,22 +1,37 @@
 from __future__ import annotations
 
+import asyncio
+import time
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import Base, SessionLocal, engine
+from .deps import enforce_csrf
 from .models import User
 from .routers import auth, bonus, files, monitoring, network, services, storage, system, users
 from .security import decode_token
 from .security import hash_password
 
 app = FastAPI(title=settings.app_name)
+
+_SECURITY_HEADERS = {
+    'Content-Security-Policy': "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net; connect-src 'self' wss:",
+    'X-Frame-Options': 'DENY',
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+}
+
+_RATE_LIMIT_CAPACITY = 20.0
+_RATE_LIMIT_REFILL_PER_SECOND = _RATE_LIMIT_CAPACITY / 60.0
+_rate_limit_bucket: dict[str, dict[str, float]] = {}
+_rate_limit_lock = asyncio.Lock()
 
 
 def _parse_cors_origins(value: str) -> list[str]:
@@ -35,6 +50,76 @@ if cors_origins:
 
 app.mount('/static', StaticFiles(directory='static'), name='static')
 templates = Jinja2Templates(directory='templates')
+
+
+def _apply_security_headers(response):
+    for key, value in _SECURITY_HEADERS.items():
+        response.headers[key] = value
+    return response
+
+
+def _client_ip(request: Request) -> str:
+    xff = request.headers.get('x-forwarded-for', '')
+    if xff:
+        return xff.split(',')[0].strip()
+    return request.client.host if request.client else 'unknown'
+
+
+def _request_is_authenticated(request: Request) -> bool:
+    auth = request.headers.get('Authorization', '')
+    token = ''
+    if auth.startswith('Bearer '):
+        token = auth.split(' ', 1)[1].strip()
+    elif request.cookies.get('access_token'):
+        token = request.cookies.get('access_token', '').strip()
+
+    if not token:
+        return False
+
+    try:
+        payload = decode_token(token)
+    except ValueError:
+        return False
+
+    return bool(payload.get('sub'))
+
+
+async def _allow_unauthenticated_request(ip: str) -> bool:
+    now = time.monotonic()
+    async with _rate_limit_lock:
+        bucket = _rate_limit_bucket.get(ip)
+        if bucket is None:
+            _rate_limit_bucket[ip] = {'tokens': _RATE_LIMIT_CAPACITY - 1.0, 'updated_at': now}
+            return True
+
+        elapsed = max(0.0, now - bucket['updated_at'])
+        bucket['tokens'] = min(_RATE_LIMIT_CAPACITY, bucket['tokens'] + elapsed * _RATE_LIMIT_REFILL_PER_SECOND)
+        bucket['updated_at'] = now
+
+        if bucket['tokens'] < 1.0:
+            return False
+
+        bucket['tokens'] -= 1.0
+        return True
+
+
+@app.middleware('http')
+async def security_middleware(request: Request, call_next):
+    path = request.url.path
+
+    if request.method in {'POST', 'PUT', 'PATCH', 'DELETE'} and path.startswith('/api/') and path != '/api/auth/login':
+        try:
+            enforce_csrf(request)
+        except HTTPException as exc:
+            return _apply_security_headers(JSONResponse({'detail': exc.detail}, status_code=exc.status_code))
+
+    if path.startswith('/api/') and not _request_is_authenticated(request):
+        allowed = await _allow_unauthenticated_request(_client_ip(request))
+        if not allowed:
+            return _apply_security_headers(JSONResponse({'detail': 'Rate limit exceeded'}, status_code=429))
+
+    response = await call_next(request)
+    return _apply_security_headers(response)
 
 
 @app.on_event('startup')
@@ -83,14 +168,6 @@ def users_page(request: Request):
     if redirect:
         return redirect
     return templates.TemplateResponse('users_page.html', {'request': request, 'page': 'users'})
-
-
-@app.get('/logs', response_class=HTMLResponse)
-def logs_page(request: Request):
-    redirect = _require_login(request)
-    if redirect:
-        return redirect
-    return templates.TemplateResponse('logs_page.html', {'request': request, 'page': 'logs'})
 
 
 @app.get('/settings', response_class=HTMLResponse)
@@ -186,5 +263,6 @@ app.include_router(monitoring.router)
 app.include_router(services.router)
 app.include_router(users.router)
 app.include_router(system.router)
+app.include_router(system.ui_router)
 app.include_router(bonus.router)
 app.include_router(network.router)
