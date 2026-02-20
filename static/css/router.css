@@ -358,6 +358,50 @@ button {
   white-space: nowrap;
 }
 
+.file-row td {
+  vertical-align: middle;
+}
+
+.file-row.is-dir td:first-child strong {
+  color: var(--accent);
+}
+
+.file-kind {
+  display: inline-block;
+  width: 1.4rem;
+  text-align: center;
+  margin-right: 0.35rem;
+}
+
+.file-type-pill {
+  display: inline-block;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  margin-right: 0.45rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.file-open,
+.parent-link,
+#files-table a[data-rename],
+#files-table a[data-delete] {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.file-open:hover,
+.parent-link:hover,
+#files-table a[data-rename]:hover,
+#files-table a[data-delete]:hover {
+  text-decoration: underline;
+}
+
+.parent-row td {
+  background: rgba(15, 138, 157, 0.05);
+}
+
 @media (max-width: 1580px) {
   .dashboard-grid {
     grid-template-columns: repeat(3, minmax(280px, 1fr));

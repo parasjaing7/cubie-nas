@@ -363,24 +363,88 @@ async function loadOverviewPage() {
 
 async function loadFiles() {
   const pathEl = document.getElementById('path');
+  const pathLabel = document.getElementById('files-current-path');
   const sortByEl = document.getElementById('sortBy');
   const sortOrderEl = document.getElementById('sortOrder');
   const tbody = document.querySelector('#files-table tbody');
   if (!pathEl || !sortByEl || !sortOrderEl || !tbody) return;
 
-  const path = pathEl.value;
+  const path = normalizeRelativePath(pathEl.value);
+  pathEl.value = path;
+  if (pathLabel) pathLabel.textContent = `Path: /${path}`;
+
   const sortBy = sortByEl.value;
   const sortOrder = sortOrderEl.value;
-  const data = await api(`/api/files/list?path=${encodeURIComponent(path)}&sort_by=${sortBy}&order=${sortOrder}`);
-  tbody.innerHTML = '';
 
-  data.data.forEach((f) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${f.is_dir ? '[DIR]' : '[FILE]'} ${f.name}</td><td>${fmtBytes(f.size)}</td><td>${new Date(f.mtime * 1000).toLocaleString()}</td><td>${
-      f.is_dir ? `<button onclick="setPath('${f.path}')">Open</button>` : `<button onclick="window.open('/api/files/download?path=${encodeURIComponent(f.path)}')">Download</button>`
-    } <button onclick="renameItem('${f.path}')">Rename</button> <button onclick="deleteItem('${f.path}')">Delete</button></td>`;
-    tbody.appendChild(tr);
-  });
+  try {
+    const data = await api(`/api/files/list?path=${encodeURIComponent(path)}&sort_by=${sortBy}&order=${sortOrder}`);
+    const items = Array.isArray(data.data) ? data.data : [];
+    tbody.innerHTML = '';
+
+    const parent = parentPath(path);
+    if (parent !== null) {
+      const tr = document.createElement('tr');
+      tr.className = 'file-row parent-row';
+      tr.innerHTML = `<td><a href="#" data-open="${parent}" class="file-open parent-link">↩ Parent Directory</a></td><td>-</td><td>-</td><td class="muted">Go back to parent folder</td>`;
+      tbody.appendChild(tr);
+    }
+
+    items.forEach((f) => {
+      const tr = document.createElement('tr');
+      tr.className = `file-row ${f.is_dir ? 'is-dir' : 'is-file'}`;
+      const fileIcon = getFileIcon(f);
+      const fileType = getFileTypeLabel(f);
+      const modified = new Date(f.mtime * 1000).toLocaleString();
+      const size = f.is_dir ? '-' : fmtBytes(f.size);
+      const mainAction = f.is_dir
+        ? `<a href="#" data-open="${f.path}" class="file-open">Open</a>`
+        : `<a href="/api/files/download?path=${encodeURIComponent(f.path)}" target="_blank" rel="noopener" class="file-open">Download</a>`;
+      tr.innerHTML = `<td><span class="file-kind">${fileIcon}</span><strong>${f.name}</strong></td><td>${modified}</td><td>${size}</td><td><span class="file-type-pill">${fileType}</span> ${mainAction} · <a href="#" data-rename="${f.path}">Rename</a> · <a href="#" data-delete="${f.path}">Delete</a></td>`;
+      tbody.appendChild(tr);
+    });
+
+    if (items.length === 0 && parent === null) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td colspan="4" class="muted">Directory is empty.</td>';
+      tbody.appendChild(tr);
+    }
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="4" class="muted">Failed to load files: ${err.message}</td></tr>`;
+  }
+}
+
+function normalizeRelativePath(path) {
+  return (path || '').replace(/^\/+/, '').replace(/\/{2,}/g, '/').replace(/\/$/, '');
+}
+
+function parentPath(path) {
+  const current = normalizeRelativePath(path);
+  if (!current) return null;
+  const parts = current.split('/').filter(Boolean);
+  if (parts.length <= 1) return '';
+  return parts.slice(0, -1).join('/');
+}
+
+function getFileTypeLabel(item) {
+  if (item.is_dir) return 'Directory';
+  const name = String(item.name || '').toLowerCase();
+  if (name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/)) return 'Image file';
+  if (name.match(/\.(mp4|mkv|avi|mov|webm)$/)) return 'Video file';
+  if (name.match(/\.(mp3|wav|flac|ogg|m4a)$/)) return 'Audio file';
+  if (name.match(/\.(zip|rar|7z|tar|gz)$/)) return 'Archive';
+  if (name.match(/\.(txt|md|log|json|yaml|yml|ini|conf)$/)) return 'Text/Config';
+  return 'File';
+}
+
+function getFileIcon(item) {
+  if (item.is_dir) return '📁';
+  const kind = getFileTypeLabel(item);
+  if (kind === 'Image file') return '🖼️';
+  if (kind === 'Video file') return '🎞️';
+  if (kind === 'Audio file') return '🎵';
+  if (kind === 'Archive') return '🗜️';
+  if (kind === 'Text/Config') return '📄';
+  return '📦';
 }
 
 function setPath(p) {
@@ -956,3 +1020,28 @@ if (dz) {
     await uploadFiles(e.dataTransfer.files);
   });
 }
+
+document.addEventListener('click', async (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+
+  const openPath = target.getAttribute('data-open');
+  if (openPath !== null) {
+    event.preventDefault();
+    setPath(openPath);
+    return;
+  }
+
+  const renamePath = target.getAttribute('data-rename');
+  if (renamePath !== null) {
+    event.preventDefault();
+    await renameItem(renamePath);
+    return;
+  }
+
+  const deletePath = target.getAttribute('data-delete');
+  if (deletePath !== null) {
+    event.preventDefault();
+    await deleteItem(deletePath);
+  }
+});
