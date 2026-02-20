@@ -359,5 +359,19 @@ If an AI agent cannot determine whether a change is safe:
 
 ---
 
+## Agent Standing Instructions
+
+- Stack: FastAPI + Jinja2 + vanilla JS, ARM64 Debian, 1GB RAM
+- RAM budget: server must stay under 300MB (MemoryMax=300M in systemd)
+- After every change: `sudo systemctl restart cubie-nas && sleep 5 && sudo systemctl is-active cubie-nas` — must return `active`
+- No npm, no build steps, no new systemd services
+- CDN JS only from cdn.jsdelivr.net with pinned versions
+- All CSS in static/css/style.css, under 30KB
+- Commit after each task: `feat(taskN.N): description`
+- On failure: read `journalctl -u cubie-nas -n 50 --no-pager` and fix before continuing
+- Full prompt reference: see TASKS.md
+
+---
+
 *This document is the authoritative engineering policy for AI-assisted development on Cubie NAS.
 It supersedes informal instructions and must be updated when architecture changes.*
