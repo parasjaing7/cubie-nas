@@ -373,5 +373,68 @@ If an AI agent cannot determine whether a change is safe:
 
 ---
 
+## 10. Knowledge Base Policy
+
+### 10.1 Source of Truth
+
+The `/kb` directory is the project's long-term memory and canonical knowledge base.
+
+1. Before proposing any fix, search `/kb` for related entries.
+2. If a KB entry exists for the issue, propose that fix first.
+3. If KB conflicts with assumptions, **KB wins**.
+4. Never duplicate a fix that already has a KB entry — reference it instead.
+5. After every successful fix, create or update a KB entry (see §10.2).
+
+### 10.2 KB Writeback (MANDATORY)
+
+After every successful fix:
+
+1. Create a KB entry file under the correct category folder in `/kb/`.
+2. Use `/kb/TEMPLATE.md` as the template.
+3. Include **only** the final working fix (no trial-and-error).
+4. Include verification commands with expected output.
+5. Include rollback instructions.
+6. Include exact file paths changed.
+7. Add the entry to `/kb/INDEX.md`.
+
+**File naming:** `YYYY-MM-DD_short_snake_case_topic.md`
+
+If a KB entry already exists for the topic, append a dated update section instead of overwriting.
+
+### 10.3 Continuous Learning Loop
+
+- Before every answer: search `/kb` by category and keywords.
+- After every successful fix: write or update a KB entry.
+- When the user reports a mistake: record the corrected method immediately; mark old approach as superseded.
+- Goal: every resolved issue makes the next fix faster. Never repeat a recorded mistake.
+
+---
+
+## 11. Debugging Workflow (MANDATORY)
+
+For every debugging or fix request, follow this exact sequence:
+
+1. **Categorize** — Identify the likely category: `linux/`, `smb/`, `usb/`, `kernel/`, `uboot/`, `networking/`, `storage/`, `permissions/`, `services/`, `docker/`, `git/`, `troubleshooting/`, `opentap/`, `tools/`.
+2. **Search KB** — Check `/kb/<category>/` and `/kb/INDEX.md` for existing entries.
+3. **Propose from KB** — If a relevant entry exists, propose that fix first with a reference.
+4. **Diagnose** — If no KB entry applies, run safe diagnostic commands only (`uname -a`, `lsblk`, `journalctl`, `dmesg`, `systemctl status`, `ip addr`, `findmnt`, etc.). Never run destructive commands without user confirmation.
+5. **Analyze** — Explain findings clearly with exact log lines or output.
+6. **Fix** — Apply the minimal, targeted fix.
+7. **Verify** — Provide explicit verification commands with expected output.
+8. **Summarize** — State root cause and fix in 2–3 lines.
+9. **Write KB** — Create or update a KB entry. This step is **not optional**.
+
+---
+
+## 12. Anti-Hallucination Rules
+
+- Never invent commands without explaining what they do.
+- Never assume distro, kernel version, or architecture without checking (`uname -a`, `cat /etc/os-release`).
+- Prefer diagnostic tools: `dmesg`, `journalctl`, `lsblk`, `findmnt`, `ip addr`, `systemctl status`.
+- Never suggest irreversible changes without explicit user confirmation.
+- Never fabricate file paths, package names, or config syntax.
+
+---
+
 *This document is the authoritative engineering policy for AI-assisted development on Cubie NAS.
 It supersedes informal instructions and must be updated when architecture changes.*
