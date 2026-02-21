@@ -289,14 +289,14 @@ Referrer-Policy: strict-origin-when-cross-origin
 - [x] Restart and verify card shows correct state
 - **Commit:** `feat(task5.2): syncthing backup status card`
 
-### ⬜ TASK 5.3 — Final memory audit
-- [ ] Measure RAM: idle, dashboard open 10 mins, file manager large folder, terminal open, logs streaming
-- [ ] For each: `systemctl show cubie-nas --property=MemoryCurrent`
-- [ ] If >250MB: use `tracemalloc` snapshot to identify top allocations, fix
-- [ ] No large objects in module-level variables
-- [ ] WebSocket handlers yield control, don't accumulate data
-- [ ] Confirm: idle <150MB, worst-case <250MB
-- [ ] Document measurements in `README.md` under "Performance" section
+### ✅ TASK 5.3 — Final memory audit
+- [x] Measure RAM: idle, dashboard open 10 mins, file manager large folder, terminal open, logs streaming
+- [x] For each: `systemctl show cubie-nas --property=MemoryCurrent`
+- [x] If >250MB: use `tracemalloc` snapshot to identify top allocations, fix
+- [x] No large objects in module-level variables
+- [x] WebSocket handlers yield control, don't accumulate data
+- [x] Confirm: idle <150MB, worst-case <250MB
+- [x] Document measurements in `README.md` under "Performance" section
 - **Commit:** `feat(task5.3): memory audit and optimization`
 
 ### ⬜ TASK 5.4 — Final security audit

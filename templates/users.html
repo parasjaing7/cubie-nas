@@ -37,7 +37,7 @@
 </aside>
 
 <script>
-(() => {
+window.onAppReady(() => {
   const el = {
     grid: document.getElementById('users-grid'),
     openAdd: document.getElementById('users-open-add'),
@@ -176,6 +176,6 @@
   });
 
   loadUsers();
-})();
+});
 </script>
 {% endblock %}

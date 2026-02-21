@@ -428,28 +428,141 @@ button.is-busy {
 
 .system-health-row {
   display: grid;
-  grid-template-columns: 140px 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
-  align-items: center;
+  align-items: stretch;
 }
 
-.cpu-ring-wrap {
+.health-metric {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 144px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.7rem;
 }
 
 .cpu-ring {
-  width: 108px;
-  height: 108px;
+  width: 92px;
+  height: 92px;
   border-radius: 50%;
   display: grid;
   place-items: center;
   font-weight: 700;
   color: var(--text);
   background: conic-gradient(var(--accent) 0deg, var(--line) 0deg);
-  border: 1px solid var(--line);
+  border: 2px solid rgba(210, 223, 236, 0.92);
+  box-shadow:
+    inset 0 0 0 1px rgba(21, 34, 49, 0.24),
+    inset 0 -12px 18px rgba(9, 18, 28, 0.16),
+    0 4px 10px rgba(9, 18, 28, 0.18);
+  position: relative;
+  overflow: hidden;
+}
+
+.cpu-ring::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.05) 40%, transparent 65%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+
+.cpu-ring::after {
+  content: '';
+  position: absolute;
+  inset: 16px;
+  border-radius: 50%;
+  border: 1px solid rgba(210, 223, 236, 0.46);
+  box-shadow: inset 0 2px 5px rgba(7, 16, 27, 0.18);
+  pointer-events: none;
+}
+
+.temp-metric {
+  gap: 0.35rem;
+  --temp-color: rgb(100, 116, 139);
+}
+
+.thermo-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thermo-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.thermo-track {
+  width: 22px;
+  height: 98px;
+  border-radius: 999px;
+  border: 2px solid rgba(210, 223, 236, 0.9);
+  background: linear-gradient(to top, rgba(59, 130, 246, 0.26) 0%, rgba(34, 197, 94, 0.22) 36%, rgba(245, 158, 11, 0.2) 66%, rgba(239, 68, 68, 0.24) 100%);
+  box-shadow: inset 0 0 0 1px rgba(21, 34, 49, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+.thermo-track::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  bottom: 4px;
+  width: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.thermo-fill {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 0;
+  height: 0%;
+  width: auto;
+  border-radius: 999px;
+  transition: height 220ms ease, background 220ms ease;
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.28);
+}
+
+.thermo-bulb {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid rgba(210, 223, 236, 0.9);
+  background: radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.08) 35%, rgba(17, 28, 40, 0.22) 100%);
+  box-shadow: inset 0 0 0 1px rgba(21, 34, 49, 0.25);
+  margin-top: -6px;
+  position: relative;
+  overflow: hidden;
+}
+
+.thermo-bulb::after {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.06) 45%, transparent 70%),
+    var(--temp-color);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.3);
+}
+
+@media (max-width: 920px) {
+  .system-health-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .health-stats {
@@ -583,6 +696,12 @@ button.is-busy {
 
 .temp-hot {
   color: var(--danger);
+}
+
+.health-reading {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.98rem;
 }
 
 .filemgr-shell {

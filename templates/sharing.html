@@ -62,7 +62,7 @@
 </aside>
 
 <script>
-(() => {
+window.onAppReady(() => {
   const el = {
     cards: document.getElementById('sharing-cards'),
     refresh: document.getElementById('sharing-refresh'),
@@ -221,6 +221,6 @@
   });
 
   loadShares();
-})();
+});
 </script>
 {% endblock %}

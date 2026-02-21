@@ -61,7 +61,7 @@
 </div>
 
 <script>
-(() => {
+window.onAppReady(() => {
   const state = {
     device: null,
     path: '',
@@ -529,6 +529,6 @@
 
   setViewMode(state.mode);
   loadDevices();
-})();
+});
 </script>
 {% endblock %}

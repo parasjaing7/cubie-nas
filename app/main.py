@@ -24,7 +24,7 @@ app = FastAPI(title=settings.app_name)
 logger = logging.getLogger(__name__)
 
 _SECURITY_HEADERS = {
-    'Content-Security-Policy': "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net; connect-src 'self' wss:",
+    'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net; connect-src 'self' ws: wss:",
     'X-Frame-Options': 'DENY',
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
@@ -32,6 +32,8 @@ _SECURITY_HEADERS = {
 
 _RATE_LIMIT_CAPACITY = 20.0
 _RATE_LIMIT_REFILL_PER_SECOND = _RATE_LIMIT_CAPACITY / 60.0
+_RATE_LIMIT_STALE_SECONDS = 600.0
+_RATE_LIMIT_MAX_KEYS = 4096
 _rate_limit_bucket: dict[str, dict[str, float]] = {}
 _rate_limit_lock = asyncio.Lock()
 
@@ -89,6 +91,17 @@ def _request_is_authenticated(request: Request) -> bool:
 async def _allow_unauthenticated_request(ip: str) -> bool:
     now = time.monotonic()
     async with _rate_limit_lock:
+        if _rate_limit_bucket and len(_rate_limit_bucket) > _RATE_LIMIT_MAX_KEYS:
+            stale_cutoff = now - _RATE_LIMIT_STALE_SECONDS
+            stale_keys = [key for key, value in _rate_limit_bucket.items() if value.get('updated_at', now) < stale_cutoff]
+            for key in stale_keys:
+                _rate_limit_bucket.pop(key, None)
+
+            if len(_rate_limit_bucket) > _RATE_LIMIT_MAX_KEYS:
+                oldest = sorted(_rate_limit_bucket.items(), key=lambda item: item[1].get('updated_at', now))
+                for key, _value in oldest[: len(_rate_limit_bucket) - _RATE_LIMIT_MAX_KEYS]:
+                    _rate_limit_bucket.pop(key, None)
+
         bucket = _rate_limit_bucket.get(ip)
         if bucket is None:
             _rate_limit_bucket[ip] = {'tokens': _RATE_LIMIT_CAPACITY - 1.0, 'updated_at': now}
@@ -155,9 +168,17 @@ def startup():
 
 @app.get('/', response_class=HTMLResponse)
 def root(request: Request):
-    if request.cookies.get('access_token'):
+    if request.cookies.get('access_token') and _request_is_authenticated(request):
         return RedirectResponse('/overview')
     return templates.TemplateResponse('login.html', {'request': request})
+
+
+@app.get('/logout')
+def logout_page():
+    response = RedirectResponse('/')
+    response.delete_cookie('access_token')
+    response.delete_cookie('csrf_token')
+    return response
 
 
 @app.get('/overview', response_class=HTMLResponse)

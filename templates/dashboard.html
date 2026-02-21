@@ -9,15 +9,27 @@
     <article class="card dashboard-card">
       <h3>System Health</h3>
       <div class="system-health-row">
-        <div class="cpu-ring-wrap">
+        <div class="health-metric">
           <div id="dash-cpu-ring" class="cpu-ring skeleton-block">0%</div>
           <span class="muted">CPU</span>
+          <strong id="dash-uptime" class="health-reading skeleton-text">-</strong>
         </div>
-        <div class="health-stats">
-          <div class="kv"><span>RAM</span><strong id="dash-ram-text" class="skeleton-text">-</strong></div>
-          <div class="progress"><span id="dash-ram-bar" class="skeleton-line"></span></div>
-          <div class="kv"><span>Temp</span><strong id="dash-temp" class="skeleton-text">-</strong></div>
-          <div class="kv"><span>Uptime</span><strong id="dash-uptime" class="skeleton-text">-</strong></div>
+        <div class="health-metric">
+          <div id="dash-ram-ring" class="cpu-ring skeleton-block">0%</div>
+          <span class="muted">RAM</span>
+          <strong id="dash-ram-text" class="health-reading skeleton-text">-</strong>
+        </div>
+        <div class="health-metric temp-metric" id="dash-temp-metric">
+          <div class="thermo-shell">
+            <div class="thermo-wrap">
+              <div class="thermo-track">
+                <span id="dash-temp-fill" class="thermo-fill skeleton-line"></span>
+              </div>
+              <span class="thermo-bulb"></span>
+            </div>
+          </div>
+          <span class="muted">Temp</span>
+          <strong id="dash-temp" class="skeleton-text">-</strong>
         </div>
       </div>
     </article>
@@ -64,12 +76,14 @@
   </div>
 </div>
 <script>
-(() => {
+window.onAppReady(() => {
   const el = {
     cpuRing: document.getElementById('dash-cpu-ring'),
+    ramRing: document.getElementById('dash-ram-ring'),
     ramText: document.getElementById('dash-ram-text'),
-    ramBar: document.getElementById('dash-ram-bar'),
     temp: document.getElementById('dash-temp'),
+    tempFill: document.getElementById('dash-temp-fill'),
+    tempMetric: document.getElementById('dash-temp-metric'),
     uptime: document.getElementById('dash-uptime'),
     ip: document.getElementById('dash-ip'),
     tx: document.getElementById('dash-tx'),
@@ -115,6 +129,25 @@
     return 'temp-ok';
   }
 
+  function interpolateColor(from, to, ratio) {
+    const clamped = Math.max(0, Math.min(1, ratio));
+    const r = Math.round(from[0] + (to[0] - from[0]) * clamped);
+    const g = Math.round(from[1] + (to[1] - from[1]) * clamped);
+    const b = Math.round(from[2] + (to[2] - from[2]) * clamped);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  function tempColor(tempC) {
+    if (!Number.isFinite(tempC) || tempC <= 0) return 'rgb(100, 116, 139)';
+    if (tempC <= 50) {
+      return interpolateColor([34, 197, 94], [245, 158, 11], tempC / 50);
+    }
+    if (tempC <= 65) {
+      return interpolateColor([245, 158, 11], [239, 68, 68], (tempC - 50) / 15);
+    }
+    return 'rgb(239, 68, 68)';
+  }
+
   function storageIcon(type) {
     if (type === 'usb') return '🧩';
     if (type === 'nvme') return '⚡';
@@ -123,7 +156,7 @@
 
   function updateMonitor(data) {
     const cpu = num(data?.cpu_percent);
-    clearSkeleton(el.cpuRing, el.ramText, el.ramBar, el.temp, el.uptime, el.ip, el.tx, el.rx);
+    clearSkeleton(el.cpuRing, el.ramRing, el.ramText, el.temp, el.tempFill, el.uptime, el.ip, el.tx, el.rx);
     const deg = Math.round((Math.max(0, Math.min(100, cpu)) / 100) * 360);
     el.cpuRing.style.background = `conic-gradient(var(--accent) ${deg}deg, var(--line) ${deg}deg)`;
     el.cpuRing.textContent = pct(cpu);
@@ -131,12 +164,21 @@
     const memTotal = num(data?.ram_total_mb);
     const memUsed = num(data?.ram_used_mb);
     const mem = memTotal > 0 ? (memUsed / memTotal) * 100 : 0;
-    el.ramText.textContent = pct(mem);
-    el.ramBar.style.width = pct(mem);
+    const memDeg = Math.round((Math.max(0, Math.min(100, mem)) / 100) * 360);
+    el.ramRing.style.background = `conic-gradient(var(--accent) ${memDeg}deg, var(--line) ${memDeg}deg)`;
+    el.ramRing.textContent = pct(mem);
+    el.ramText.textContent = memTotal > 0 ? `${memUsed.toFixed(1)} / ${memTotal.toFixed(1)} MB` : '-';
 
     const temp = num(data?.temp_c);
+    const tempPaint = tempColor(temp);
     el.temp.className = tempClass(temp);
     el.temp.textContent = Number.isFinite(temp) && temp > 0 ? `${temp.toFixed(1)}°C` : '-';
+    const tempPercent = Math.max(0, Math.min(100, (temp / 80) * 100));
+    el.tempFill.style.height = `${tempPercent}%`;
+    el.tempFill.style.background = tempPaint;
+    if (el.tempMetric) {
+      el.tempMetric.style.setProperty('--temp-color', tempPaint);
+    }
 
     const up = num(data?.uptime_seconds);
     const days = Math.floor(up / 86400);
@@ -302,6 +344,6 @@
       window.setButtonBusy(target, false);
     }
   });
-})();
+});
 </script>
 {% endblock %}

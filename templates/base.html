@@ -50,6 +50,18 @@
         <h2>{% block title %}Dashboard{% endblock %}</h2>
         <p id="top-status">Connected</p>
       </header>
+      <script>
+        window.__appReady = false;
+        window.__appReadyQueue = [];
+        window.onAppReady = function onAppReady(callback) {
+          if (typeof callback !== 'function') return;
+          if (window.__appReady) {
+            callback();
+            return;
+          }
+          window.__appReadyQueue.push(callback);
+        };
+      </script>
       <main>
         {% block content %}{% endblock %}
       </main>
@@ -189,6 +201,19 @@
         setExpanded(!expanded);
       });
     })();
+
+    window.__appReady = true;
+    if (Array.isArray(window.__appReadyQueue)) {
+      const queued = window.__appReadyQueue.slice();
+      window.__appReadyQueue.length = 0;
+      queued.forEach((callback) => {
+        try {
+          callback();
+        } catch (error) {
+          console.error(error);
+        }
+      });
+    }
   </script>
   <script src="/static/js/router.js?v=20260220a"></script>
 </body>

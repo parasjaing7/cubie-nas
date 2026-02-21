@@ -148,6 +148,23 @@ sudo ufw status verbose
 - User management: app users + Linux users/passwords + folder ownership/mode + active sessions
 - Bonus: Docker container list/start/stop, rsync backup run endpoint, plugin directory scaffold
 
+## Performance
+
+Measured on 2026-02-21 using `systemctl show cubie-nas --property=MemoryCurrent` sampled every 5s while exercising each scenario:
+
+| Scenario | Duration | Peak RAM (MB) | Final RAM (MB) |
+|---|---:|---:|---:|
+| Idle | 60s | 76.06 | 75.86 |
+| Dashboard open (live WS + polling) | 10m | 93.77 | 93.43 |
+| File manager large-folder browsing | 2m | 93.91 | 93.51 |
+| Terminal open (`/ws/terminal`) | 2m | 94.28 | 94.16 |
+| Logs streaming (`/ws/logs`) | 2m | 225.37 | 224.42 |
+
+Audit outcome:
+- Idle target `<150MB`: **PASS** (76.06MB peak)
+- Worst-case target `<250MB`: **PASS** (225.37MB peak)
+- `>250MB` threshold for `tracemalloc` investigation: **not triggered**
+
 ## Performance Tuning Guide
 
 - Keep `uvicorn` single-process (default) to reduce RAM.

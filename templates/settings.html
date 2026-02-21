@@ -48,7 +48,7 @@
 </div>
 
 <script>
-(() => {
+window.onAppReady(() => {
   function uptimeText(sec) {
     const s = Number(sec || 0);
     const d = Math.floor(s / 86400);
@@ -122,6 +122,6 @@
   });
 
   loadSettingsData();
-})();
+});
 </script>
 {% endblock %}
