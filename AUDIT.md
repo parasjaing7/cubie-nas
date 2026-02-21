@@ -340,3 +340,58 @@ Referrer-Policy: strict-origin-when-cross-origin
 | 16 | LOW | Test deps in prod requirements | TASK 1.1 |
 | 17 | INFO | Font stack mismatch | TASK 1.3 |
 | 18 | INFO | Network page references missing DOM | TASK 4.3 |
+
+---
+
+## 8. Final Security Audit (TASK 5.4) — 2026-02-21
+
+### Scope Covered
+- WebSocket authentication enforcement
+- Path traversal protection regression check
+- Global security header presence
+- Unauthenticated rate limiting behavior
+- Terminal one-session-per-user control
+- Dynamic execution injection scan (`exec(`)
+- `user_ctl.py` command routing (`chpasswd` through `system_cmd`)
+- CSRF enforcement architecture validation
+- Dead code cleanup verification (`app.js`, orphan templates, unused CSS)
+
+### Findings and Evidence
+1. **WebSocket endpoints reject unauthenticated clients — PASS**
+	- Endpoints checked: `/ws/monitor`, `/api/monitor/ws`, `/ws/terminal`, `/ws/logs`
+	- Runtime probe result: unauthenticated handshakes rejected (`InvalidStatus` in client probe).
+
+2. **Path traversal protection still effective — PASS**
+	- Tests: `tests/test_file_ops_security.py`
+	- Relevant traversal tests pass, including 403 behavior for traversal attempts.
+
+3. **Security headers present on responses — PASS**
+	- Checked representative routes (`/overview`, `/api/storage/devices`, `/health` 404 response).
+	- Headers observed: `Content-Security-Policy`, `X-Frame-Options=DENY`, `X-Content-Type-Options=nosniff`, `Referrer-Policy=strict-origin-when-cross-origin`.
+
+4. **Rate limiting active for unauthenticated traffic — PASS**
+	- 25 rapid unauthenticated requests to `/api/storage/devices`.
+	- Observed transition from `401` to `429` (5 responses with `429`).
+
+5. **Terminal enforces one active session per user — PASS**
+	- First authenticated terminal WebSocket opens successfully.
+	- Second concurrent authenticated terminal connection for same user is rejected (`InvalidStatus`).
+
+6. **`exec(` injection-risk audit — PASS (no unsafe usage found)**
+	- `scripts/`: no `exec(` matches.
+	- `app/`: no Python `exec(` usage; only `asyncio.create_subprocess_exec` instances inside `app/services/system_cmd.py` (approved command abstraction layer).
+
+7. **`user_ctl.py` `chpasswd` routing — PASS**
+	- Verified `app/services/user_ctl.py` uses `RealCommandRunner().run(['chpasswd'], input_text=...)`.
+	- No direct subprocess invocation in `user_ctl.py`.
+
+8. **CSRF middleware-based enforcement — PASS**
+	- Verified enforcement in `app/main.py` middleware via `enforce_csrf(request)` for mutation methods.
+	- No per-endpoint opt-in CSRF dependencies remain.
+
+9. **Dead code cleanup status — PASS**
+	- Confirmed absent: `static/js/app.js`, `static/css/router.css`.
+	- Removed orphan templates: `templates/file_manager_page.html`, `templates/users_page.html`, `templates/logs_page.html`, `templates/settings_page.html`, `templates/overview.html`.
+
+### Outcome
+- **TASK 5.4 closed**: all required checks passed, with no new critical/high security findings introduced.

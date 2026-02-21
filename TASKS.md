@@ -299,18 +299,18 @@ Referrer-Policy: strict-origin-when-cross-origin
 - [x] Document measurements in `README.md` under "Performance" section
 - **Commit:** `feat(task5.3): memory audit and optimization`
 
-### ⬜ TASK 5.4 — Final security audit
+### ✅ TASK 5.4 — Final security audit
 > **Audit refs:** §3.2 (user_ctl subprocess bypass), §3.15 (CSRF opt-in)
-- [ ] All WebSocket endpoints reject unauthenticated connections
-- [ ] Path traversal test still passes
-- [ ] Security headers present on all responses
-- [ ] Rate limiting active (test 25 rapid unauthenticated requests)
-- [ ] Terminal enforces 1 session per user
-- [ ] `grep -r "exec(" app/ scripts/` — audit every instance for injection risk
-- [ ] Verify `user_ctl.py` `chpasswd` call now routes through `system_cmd.py` (originally fixed in TASK 1.2, verify it wasn't regressed)
-- [ ] Verify CSRF enforcement is middleware-based, not opt-in per-endpoint (originally fixed in TASK 1.2)
-- [ ] Verify no dead code remains (`app.js`, orphan templates, unused CSS)
-- [ ] Document findings in `AUDIT.md`
+- [x] All WebSocket endpoints reject unauthenticated connections
+- [x] Path traversal test still passes
+- [x] Security headers present on all responses
+- [x] Rate limiting active (test 25 rapid unauthenticated requests)
+- [x] Terminal enforces 1 session per user
+- [x] `grep -r "exec(" app/ scripts/` — audit every instance for injection risk
+- [x] Verify `user_ctl.py` `chpasswd` call now routes through `system_cmd.py` (originally fixed in TASK 1.2, verify it wasn't regressed)
+- [x] Verify CSRF enforcement is middleware-based, not opt-in per-endpoint (originally fixed in TASK 1.2)
+- [x] Verify no dead code remains (`app.js`, orphan templates, unused CSS)
+- [x] Document findings in `AUDIT.md`
 - **Commit:** `feat(task5.4): final security audit`
 
 ---
