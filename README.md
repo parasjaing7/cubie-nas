@@ -1,235 +1,317 @@
-# Cubie NAS (ARM64)
+# Cubie NAS
 
-Web-based NAS management server for Cubie A5E, optimized for lightweight deployment on Debian/Ubuntu ARM64.
+Turn your Cubie A5E (or any ARM64 Debian/Ubuntu board) into a full-featured network-attached storage appliance with a modern web interface — no cloud subscription required.
 
-## Project Structure
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Platform](https://img.shields.io/badge/platform-ARM64_Debian-orange)
+![Python](https://img.shields.io/badge/python-3.9%2B-green)
 
-```text
-cubie-nas/
-  app/
-    config.py
-    db.py
-    deps.py
-    main.py
-    models.py
-    schemas.py
-    security.py
-    routers/
-      auth.py
-      bonus.py
-      files.py
-      monitoring.py
-      services.py
-      storage.py
-      system.py
-      users.py
-    services/
-      file_ops.py
-      monitor.py
-      service_ctl.py
-      ssl.py
-      storage.py
-      system_cmd.py
-      user_ctl.py
-  plugins/
-    example_plugin.py
-  scripts/
-    generate-self-signed.sh
-    install.sh
-  static/
-    css/style.css
-    js/router.js
-  templates/
-    overview.html
-    login.html
-  systemd/
-    cubie-nas.service
-  .env.example
-  requirements.txt
-  README.md
-```
+---
 
-## Install (ARM64 Debian/Ubuntu)
+## What You Get
+
+| Feature | Description |
+|---------|-------------|
+| **Dashboard** | Live system health (CPU, RAM, temperature, uptime), storage overview, network speeds, service status — all updating in real time via WebSocket |
+| **File Manager** | Browse, upload (drag & drop), download, rename, delete files across SD, USB, and NVMe drives — with path-traversal protection |
+| **SMB Sharing** | Create and manage Samba shares from the UI — pick a folder, set access (everyone or specific users), one-click add/remove |
+| **User Management** | Create app users and Linux system users, change passwords, assign admin/user roles, delete accounts |
+| **Storage** | Detect USB and NVMe drives, format (ext4/exfat), mount/unmount, one-click provision as SMB share with wipe/repartition option |
+| **Services** | Start, stop, enable, disable Samba, SSH, NFS, and FTP from the UI |
+| **Network** | View current IP/gateway/DNS, switch between DHCP and static, see ethernet/WiFi/Bluetooth/hotspot status |
+| **Terminal** | Full browser-based terminal (xterm.js) — PTY over WebSocket, one session per user |
+| **Log Viewer** | Live-streaming journal logs for all NAS services — color-coded, filterable, auto-scrolling |
+| **Backup Status** | Syncthing integration card — shows sync status if installed, or a helpful prompt if not |
+| **Docker** | List, start, and stop Docker containers (if Docker is installed) |
+| **Security** | JWT auth with secure cookies, CSRF protection, brute-force lockout, rate limiting, security headers on every response, systemd sandboxing |
+
+---
+
+## Quick Start
+
+### Requirements
+
+- ARM64 board running Debian 11+ or Ubuntu 20.04+ (tested on Cubie A5E / Radxa)
+- Root (sudo) access
+- Internet connection for initial package install
+
+### One-Command Install
 
 ```bash
-cd /home/radxa/nas102/cubie-nas
+git clone https://github.com/parasjaing7/cubie-nas.git
+cd cubie-nas
 sudo bash scripts/install.sh
 ```
 
-This script installs dependencies, creates virtualenv, generates TLS cert, installs `systemd` service, and starts the server.
+This will:
+1. Install all system packages (Samba, NFS, SSH, FTP, smartmontools, etc.)
+2. Copy the app to `/opt/cubie-nas`
+3. Generate a random JWT secret and `.env` config
+4. Create a Python virtual environment and install dependencies
+5. Generate a self-signed TLS certificate
+6. Enable and start the `cubie-nas` systemd service
 
-## Safe Deploy (preserve runtime `.env` and `.venv`)
+When it finishes, you'll see:
+```
+Installation completed.
+Open: https://<your-device-ip>:8443
+```
 
-Use this for code updates to `/opt/cubie-nas` so runtime secrets and virtualenv are never deleted:
+### First Login
+
+1. Open `https://<your-device-ip>:8443` in your browser
+2. Accept the self-signed certificate warning
+3. Log in with: **admin** / **admin12345**
+4. **Change the default password immediately** via Users page
+
+---
+
+## Updating
+
+After pulling new code, deploy without losing your config or data:
 
 ```bash
 cd /home/radxa/nas102/cubie-nas
+git pull
 bash scripts/deploy-safe.sh
 ```
 
-Dry-run preview (no changes):
+This syncs code to `/opt/cubie-nas` while preserving `.env`, `.venv/`, and database, then restarts the service.
 
+Preview what would change (dry run):
 ```bash
 bash scripts/deploy-safe.sh --dry-run
 ```
 
-This script enforces rsync excludes for `.env`, `.venv/`, and `__pycache__/`, then restarts `cubie-nas` and verifies `systemctl is-active` is `active`.
-
-Shortcut via Makefile:
-
+Or use the Makefile shortcut:
 ```bash
-make deploy-safe
+make deploy-safe        # deploy + restart
+make deploy-safe-dry    # preview only
 ```
 
-Dry-run shortcut:
+---
+
+## Managing the Service
 
 ```bash
-make deploy-safe-dry
+sudo systemctl status cubie-nas     # check status
+sudo systemctl restart cubie-nas    # restart
+sudo systemctl stop cubie-nas       # stop
+sudo journalctl -u cubie-nas -f     # live logs
 ```
 
-## Manual Install (if needed)
+---
 
-```bash
-sudo apt update
-sudo apt install -y python3 python3-venv python3-pip smartmontools util-linux exfatprogs ntfs-3g xfsprogs dosfstools samba nfs-kernel-server openssh-server vsftpd openssl ufw rsync
-sudo mkdir -p /opt/cubie-nas /var/lib/cubie-nas /etc/cubie-nas /srv/nas
-sudo cp -r /home/radxa/nas102/cubie-nas/* /opt/cubie-nas/
-cd /opt/cubie-nas
-sudo cp .env.example .env
-sudo sed -i "s|change-me-to-long-random-string|$(openssl rand -hex 32)|" .env
-sudo python3 -m venv .venv
-sudo .venv/bin/pip install --upgrade pip
-sudo .venv/bin/pip install -r requirements.txt
-sudo bash scripts/generate-self-signed.sh /etc/cubie-nas/cert.pem /etc/cubie-nas/key.pem cubie-nas.local
-sudo install -m 644 systemd/cubie-nas.service /etc/systemd/system/cubie-nas.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now cubie-nas
-```
+## Firewall Setup
 
-## Access
-
-- URL: `https://<cubie-ip>:8443`
-- Default app admin: `admin`
-- Default app password: `admin12345`
-- Change it immediately in User Management.
-
-## Systemd Controls
-
-```bash
-sudo systemctl status cubie-nas
-sudo systemctl restart cubie-nas
-sudo journalctl -u cubie-nas -f
-```
-
-## Firewall Commands
+Recommended firewall rules (applied automatically via Settings > Firewall in the UI, or manually):
 
 ```bash
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
-sudo ufw allow 22/tcp
-sudo ufw allow 445/tcp
-sudo ufw allow 2049/tcp
-sudo ufw allow 8443/tcp
+sudo ufw allow 22/tcp      # SSH
+sudo ufw allow 445/tcp     # Samba
+sudo ufw allow 2049/tcp    # NFS
+sudo ufw allow 8443/tcp    # Cubie NAS web UI
 sudo ufw --force enable
-sudo ufw status verbose
 ```
 
-## Features Included
+---
 
-- JWT auth login/logout with secure cookies
-- Role-based access (`admin`, `user`)
-- Brute-force lockout protection
-- CSRF protection (double-submit token)
-- HTTPS self-signed certificate generation
-- Storage discovery + SMART + mount/unmount + format
-- File manager: browse, sort, upload, download, rename, delete, mkdir, drag/drop upload
-- Monitoring via WebSocket: CPU/RAM/temp/network speed/disk I/O/uptime
-- Service controls: Samba, NFS, SSH, FTP (vsftpd)
-- User management: app users + Linux users/passwords + folder ownership/mode + active sessions
-- Bonus: Docker container list/start/stop, rsync backup run endpoint, plugin directory scaffold
+## Configuration
+
+All runtime configuration lives in `/opt/cubie-nas/.env`:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `APP_HOST` | `0.0.0.0` | Listen address |
+| `APP_PORT` | `8443` | Listen port |
+| `JWT_SECRET` | *(auto-generated)* | Secret for signing auth tokens — keep this safe |
+| `JWT_EXPIRE_MINUTES` | `120` | Session duration |
+| `NAS_ROOT` | `/srv/nas` | Root directory for file browsing |
+| `DATABASE_URL` | `sqlite:////var/lib/cubie-nas/cubie_nas.db` | Database path |
+| `TLS_CERT_FILE` | `/etc/cubie-nas/cert.pem` | TLS certificate path |
+| `TLS_KEY_FILE` | `/etc/cubie-nas/key.pem` | TLS private key path |
+| `CORS_ORIGINS` | *(empty)* | Comma-separated allowed origins (if using a reverse proxy) |
+| `COMMAND_TIMEOUT_SEC` | `20` | Timeout for system commands (2–300) |
+| `LOG_LEVEL` | `info` | Logging level |
+
+---
+
+## Security Checklist
+
+After installation, harden your device:
+
+- [ ] Change the default admin password (`admin12345`)
+- [ ] Back up `/opt/cubie-nas/.env` — it contains your JWT secret
+- [ ] Replace the self-signed TLS cert with a trusted one if available
+- [ ] Restrict web UI access to your LAN (router firewall or reverse proxy)
+- [ ] Disable unused services (FTP, NFS) if you only need Samba
+- [ ] Enable key-based SSH and disable password login
+- [ ] Keep the OS updated: `sudo apt update && sudo apt upgrade`
+
+---
+
+## Storage & Drives
+
+Cubie NAS automatically detects connected drives:
+
+| Drive Type | Detection | Icon |
+|------------|-----------|------|
+| SD Card | `mmcblk*` devices | SD card |
+| USB | `TRAN=usb` in lsblk | USB drive |
+| NVMe | `TRAN=nvme` or `/dev/nvme*` | NVMe SSD |
+
+From the **NAS** page you can:
+- Format a drive as ext4 or exfat
+- Mount/unmount drives
+- Wipe and repartition a drive
+- Provision a drive as an SMB share in one step
+
+---
 
 ## Performance
 
-Measured on 2026-02-21 using `systemctl show cubie-nas --property=MemoryCurrent` sampled every 5s while exercising each scenario:
+Measured on Cubie A5E (ARM64, 4GB RAM):
 
-| Scenario | Duration | Peak RAM (MB) | Final RAM (MB) |
-|---|---:|---:|---:|
-| Idle | 60s | 76.06 | 75.86 |
-| Dashboard open (live WS + polling) | 10m | 93.77 | 93.43 |
-| File manager large-folder browsing | 2m | 93.91 | 93.51 |
-| Terminal open (`/ws/terminal`) | 2m | 94.28 | 94.16 |
-| Logs streaming (`/ws/logs`) | 2m | 225.37 | 224.42 |
+| Scenario | Peak RAM | Steady RAM |
+|----------|----------|------------|
+| Idle | 76 MB | 76 MB |
+| Dashboard (live WebSocket + polling) | 94 MB | 93 MB |
+| File manager (large folder) | 94 MB | 94 MB |
+| Terminal session | 94 MB | 94 MB |
+| Log streaming (all services) | 225 MB | 224 MB |
 
-Audit outcome:
-- Idle target `<150MB`: **PASS** (76.06MB peak)
-- Worst-case target `<250MB`: **PASS** (225.37MB peak)
-- `>250MB` threshold for `tracemalloc` investigation: **not triggered**
+Memory is capped at **300 MB** by systemd (`MemoryMax=300M`). Typical usage stays under 100 MB.
 
-## Performance Tuning Guide
+### Performance Tips
 
-- Keep `uvicorn` single-process (default) to reduce RAM.
-- Use SQLite on SSD/fast USB storage for lower CPU overhead.
-- Keep logs bounded: `journalctl --vacuum-time=7d`.
-- Disable unused services:
-  - `sudo systemctl disable --now vsftpd` (if FTP not needed)
-  - `sudo systemctl disable --now nfs-kernel-server` (if NFS not needed)
-- Keep swap enabled but small (`1-2GB`) to prevent OOM spikes.
-- On large file transfers, prefer wired LAN and ext4/xfs for lower CPU overhead.
+- Keep uvicorn single-process (default) to minimize RAM
+- Use ext4 or xfs on SSD/USB for lower CPU overhead
+- Prune journal logs: `sudo journalctl --vacuum-time=7d`
+- Disable unused services to free resources
+- Keep a small swap partition (1–2 GB) as OOM safety net
 
-## Security Hardening Checklist
+---
 
-- Change default admin password immediately.
-- Rotate `JWT_SECRET` in `/opt/cubie-nas/.env`.
-- Replace self-signed cert with trusted LAN PKI cert if available.
-- Restrict dashboard access to trusted subnets (router firewall or reverse proxy ACL).
-- Disable unused protocols (Samba/NFS/FTP/SSH) through dashboard or systemctl.
-- Enforce key-based SSH auth and disable password SSH login.
-- Keep OS packages updated: `sudo apt update && sudo apt upgrade`.
-- Backup `/opt/cubie-nas/.env` and database securely.
-- Review `journalctl -u cubie-nas` and auth failures regularly.
-
-## Notes
-
-- Storage formatting/mount/system service operations require root service execution.
-- App runs with `MemoryMax=300M` in `systemd/cubie-nas.service`.
-- Snapshot support depends on filesystem (btrfs/zfs) and is not enabled by default.
-
-## Knowledge Base (KB)
-
-This repository includes a structured knowledge base under `/kb` that serves as long-term memory for debugging, fixes, and operational knowledge.
-
-### Purpose
-
-- Prevent repeated mistakes by recording every validated fix.
-- Provide a searchable reference for common issues across Linux, storage, networking, SMB, USB, services, and more.
-- Act as a RAG (Retrieval-Augmented Generation) store for AI coding assistants (Copilot, Codex, Claude).
-
-### Structure
+## Architecture
 
 ```
-kb/
-  INDEX.md          # Master index of all entries
-  TEMPLATE.md       # Entry template (copy for new entries)
-  CONTRIBUTING.md   # Quality rules and contribution guide
-  linux/            # OS-level: systemd, packages, boot, logs
-  smb/              # Samba config, shares, testparm
-  usb/              # USB detection, hotplug, mount, power
-  kernel/           # Kernel panics, modules, dmesg, drivers
-  uboot/            # U-Boot config, boot sequence, serial
-  networking/       # IP config, DNS, firewall, interfaces
-  storage/          # Disks, partitions, fstab, SMART, mount
-  permissions/      # Ownership, ACLs, chmod, NAS user mapping
-  services/         # systemd units, cubie-nas service lifecycle
-  docker/           # Container lifecycle, images, volumes
-  git/              # Git workflows, deploy sync
-  troubleshooting/  # Cross-cutting multi-category issues
-  opentap/          # OpenTAP integration, test automation
-  tools/            # CLI utilities, scripts, dev tooling
+Browser ──── HTTPS :8443 ──── FastAPI (uvicorn) ──── systemd cubie-nas.service
+                                  │
+                    ┌─────────────┼─────────────┐
+                    │             │             │
+               Jinja2        REST API      WebSocket
+              templates     (JSON)       (live data)
+                    │             │             │
+                    └─────┬───────┘             │
+                          │                     │
+                     SQLite DB           psutil / lsblk
+                  /var/lib/cubie-nas      system commands
 ```
 
-### How to Use
+- **Backend:** Python 3.9+ / FastAPI / SQLAlchemy / SQLite
+- **Frontend:** Jinja2 templates + vanilla ES6 JavaScript (no build step, no npm)
+- **CSS:** Single `style.css` (15 KB), system-ui font stack, CSS custom properties for dark/light theming
+- **CDN:** Only xterm.js 5.3.0 from jsdelivr (for terminal)
+- **Auth:** JWT tokens in httpOnly cookies + CSRF double-submit
+- **Systemd:** Sandboxed with `ProtectSystem=strict`, `PrivateTmp=true`, capped at 300 MB RAM
 
-1. **Before debugging:** Search `/kb/INDEX.md` or the relevant category folder.
-2. **After solving an issue:** Create a KB entry using `kb/TEMPLATE.md` and add it to `kb/INDEX.md`.
-3. **Quality rules:** No raw logs, no speculation, only validated final fixes. See `kb/CONTRIBUTING.md`.
+---
+
+## Project Structure
+
+```
+cubie-nas/
+├── app/                    # FastAPI application
+│   ├── main.py             # App entry, middleware, page routes
+│   ├── config.py           # Settings from .env
+│   ├── db.py               # SQLAlchemy engine + session
+│   ├── models.py           # User, LoginAttempt models
+│   ├── schemas.py          # Pydantic request/response schemas
+│   ├── security.py         # JWT, bcrypt, CSRF helpers
+│   ├── deps.py             # Auth dependencies (get_current_user, require_admin)
+│   ├── routers/            # API route modules
+│   │   ├── auth.py         # Login/logout + brute-force lockout
+│   │   ├── files.py        # File CRUD + upload/download
+│   │   ├── storage.py      # Drive detection, mount, format, provision
+│   │   ├── sharing.py      # SMB share management (smb.conf)
+│   │   ├── services.py     # Samba/SSH/NFS/FTP control
+│   │   ├── users.py        # App + system user management
+│   │   ├── network.py      # Network config (DHCP/static)
+│   │   ├── monitoring.py   # WebSocket live stats + Syncthing
+│   │   ├── system.py       # Terminal WS, logs WS, device info
+│   │   └── bonus.py        # Docker, rsync backup, plugins
+│   └── services/           # Business logic layer
+│       ├── file_ops.py     # Path validation + file operations
+│       ├── monitor.py      # CPU/RAM/temp/network sampling
+│       ├── storage.py      # lsblk parsing + disk usage
+│       ├── network.py      # NetworkManager / interfaces.d config
+│       ├── service_ctl.py  # systemctl wrapper
+│       ├── system_cmd.py   # Command runner with timeout + retry
+│       ├── user_ctl.py     # useradd / chpasswd wrapper
+│       ├── usb_share.py    # USB/NVMe provision workflow
+│       ├── syncthing.py    # Syncthing status check
+│       ├── ssl.py          # Self-signed cert generation
+│       └── system_info.py  # Hardware/OS info
+├── templates/              # Jinja2 HTML templates
+│   ├── base.html           # Shared layout (sidebar, nav, helpers)
+│   ├── login.html          # Login page
+│   ├── dashboard.html      # Dashboard with live cards
+│   ├── files.html          # File manager
+│   ├── sharing.html        # SMB share management
+│   ├── users.html          # User management
+│   ├── settings.html       # Device settings
+│   ├── storage_page.html   # Advanced storage view
+│   ├── services_page.html  # Advanced service control
+│   ├── network_page.html   # Network configuration
+│   ├── nas_page.html       # USB/NVMe provisioning
+│   ├── terminal.html       # Browser terminal (xterm.js)
+│   └── logs.html           # Live log viewer
+├── static/
+│   ├── css/style.css       # All styles (dark/light theme)
+│   └── js/router.js        # Client-side page logic
+├── scripts/
+│   ├── install.sh          # One-command installer
+│   ├── deploy-safe.sh      # Safe update deploy
+│   └── generate-self-signed.sh
+├── systemd/
+│   └── cubie-nas.service   # Systemd unit file
+├── tests/                  # 47 automated tests
+├── kb/                     # Knowledge base (debugging reference)
+├── TASKS.md                # Development task tracker
+├── AUDIT.md                # Security audit log
+└── requirements.txt        # Python dependencies
+```
+
+---
+
+## Running Tests
+
+```bash
+cd /home/radxa/nas102/cubie-nas
+python3 -m pytest tests/ -v
+```
+
+Current: **47 tests, all passing.**
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| Can't access `https://<ip>:8443` | Check firewall: `sudo ufw status`. Ensure port 8443 is allowed. |
+| Certificate warning in browser | Expected with self-signed cert. Click "Advanced" → "Proceed". |
+| Service won't start | Check logs: `sudo journalctl -u cubie-nas -n 50 --no-pager` |
+| "Refusing to start with insecure default JWT secret" | The `.env` file is missing or has `JWT_SECRET=change-me`. Re-run install or set a real secret. |
+| Drives not showing up | Plug in the drive, wait 5 seconds, refresh the page. Check `lsblk` in terminal. |
+| Samba share not accessible | Ensure Samba is running (Services page). Check if the share folder exists and has correct permissions. |
+| High memory usage | Normal during log streaming (~225 MB). Idle stays under 100 MB. Max is capped at 300 MB. |
+
+---
+
+## License
+
+MIT
 
