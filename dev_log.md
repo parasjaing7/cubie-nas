@@ -64,3 +64,16 @@
 	- `/api/monitor/syncthing/status` -> `200`
 - Polling stability: run 4 key dashboard APIs repeatedly for ~10-15s and confirm no non-`200` responses.
 - Browser cache sanity: perform hard refresh (`Ctrl+Shift+R`) after frontend asset version bumps.
+
+## 2026-02-21T09:10:57+00:00
+
+### Validation Run (Full Test Suite)
+- Executed full suite: `python3 -m pytest -q tests/`
+- Result: **47 passed**, **0 failed**, total runtime **8.05s**
+
+### Notes
+- Warnings observed (non-blocking):
+	- `pytest-asyncio` deprecation warning about unset `asyncio_default_fixture_loop_scope`
+	- Pydantic V2 deprecation warning for class-based config
+	- FastAPI deprecation warning for `@app.on_event('startup')` lifespan migration
+- No regressions detected from Task 5.4 security-audit changes.
