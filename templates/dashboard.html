@@ -301,7 +301,8 @@ window.onAppReady(() => {
     }
   }
 
-  window.createReconnectingWebSocket('/ws/monitor', {
+  const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  window.createReconnectingWebSocket(`${wsProto}//${location.host}/ws/monitor`, {
     onmessage(event) {
       try {
         const msg = JSON.parse(event.data);

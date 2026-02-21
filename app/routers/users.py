@@ -111,6 +111,10 @@ async def set_linux_user_password(payload: PasswordChangeRequest, _: User = Depe
 
 @router.post('/permissions')
 async def set_folder_permissions(username: str, path: str, mode: str = '770', _: User = Depends(require_admin)):
+    import re
+    if not re.fullmatch(r'[0-7]{3,4}', mode):
+        raise HTTPException(status_code=400, detail='Invalid mode: must be 3 or 4 octal digits, e.g. 770')
+
     full = (Path(settings.nas_root) / path.lstrip('/')).resolve()
     if Path(settings.nas_root).resolve() not in [full, *full.parents]:
         raise HTTPException(status_code=400, detail='Invalid path')

@@ -30,7 +30,6 @@ async function api(url, options = {}) {
 }
 
 let generalWsController = null;
-let overviewWsController = null;
 
 function fmtBytes(v) {
   if (v == null) return '-';
@@ -318,74 +317,6 @@ async function loadStoragePage() {
     body.innerHTML = `<tr><td colspan="7" class="muted">Failed to load storage: ${err.message}</td></tr>`;
     const top = document.getElementById('top-status');
     if (top) top.textContent = 'Storage load failed';
-  }
-}
-
-async function loadOverviewPage() {
-  try {
-    const [generalRes, storageRes, servicesRes, networkRes] = await Promise.all([
-      api('/api/system/general-info'),
-      api('/api/storage/drives'),
-      api('/api/services/list'),
-      api('/api/network/current').catch(() => ({ data: {} })),
-    ]);
-
-    const general = generalRes.data || {};
-    const drives = storageRes.data || [];
-    const services = servicesRes.data || [];
-    const network = networkRes.data || {};
-
-    const drivesMounted = drives.filter((d) => !!d.mountpoint).length;
-    const drivesUsb = drives.filter((d) => d.is_usb || d.transport === 'usb').length;
-    const drivesNvme = drives.filter((d) => (d.transport || '').toLowerCase() === 'nvme').length;
-
-    document.getElementById('ov-iface').textContent = network.interface || '-';
-    document.getElementById('ov-ip').textContent = network.ip_address || '-';
-    document.getElementById('ov-gw').textContent = network.gateway || '-';
-    document.getElementById('ov-dns').textContent = network.dns || '-';
-
-    document.getElementById('ov-drives-total').textContent = String(drives.length);
-    document.getElementById('ov-drives-mounted').textContent = String(drivesMounted);
-    document.getElementById('ov-drives-usb').textContent = String(drivesUsb);
-    document.getElementById('ov-drives-nvme').textContent = String(drivesNvme);
-
-    const servicesBody = document.getElementById('ov-services-body');
-    servicesBody.innerHTML = '';
-    services.forEach((s) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${s.service}</td><td>${s.enabled ? 'Yes' : 'No'}</td><td>${s.active ? 'Running' : 'Stopped'}</td>`;
-      servicesBody.appendChild(tr);
-    });
-
-    document.getElementById('ov-cpu').textContent = '-';
-    document.getElementById('ov-ram').textContent = `${general.ram_total_mb || '-'} MB total`;
-    document.getElementById('ov-temp').textContent = general.temperature_c ? `${general.temperature_c.toFixed(1)} C` : 'N/A';
-    document.getElementById('ov-uptime').textContent = '-';
-
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    if (overviewWsController) {
-      overviewWsController.close();
-    }
-    overviewWsController = window.createReconnectingWebSocket(`${proto}://${location.host}/api/monitor/ws`, {
-      onmessage: (ev) => {
-      const m = JSON.parse(ev.data);
-      document.getElementById('ov-cpu').textContent = `${m.cpu_percent}%`;
-      document.getElementById('ov-ram').textContent = `${m.ram_used_mb}/${m.ram_total_mb} MB`;
-      document.getElementById('ov-temp').textContent = m.temp_c ? `${m.temp_c.toFixed(1)} C` : 'N/A';
-      document.getElementById('ov-uptime').textContent = fmtUptime(m.uptime_seconds);
-      },
-      onclose: () => {
-        const status = document.getElementById('top-status');
-        if (status) status.textContent = 'Reconnecting monitor...';
-      },
-    });
-  } catch (err) {
-    const status = document.getElementById('top-status');
-    if (status) status.textContent = `Overview load failed: ${err.message}`;
-    const servicesBody = document.getElementById('ov-services-body');
-    if (servicesBody) {
-      servicesBody.innerHTML = '<tr><td colspan="3" class="muted">Failed to load overview data. Refresh and re-login if needed.</td></tr>';
-    }
   }
 }
 
@@ -1012,11 +943,6 @@ if (localStorage.getItem('theme-dark') === '1') {
 }
 
 const page = document.body.getAttribute('data-page');
-if (page === 'overview') {
-  if (document.getElementById('ov-services-body')) {
-    loadOverviewPage();
-  }
-}
 if (page === 'general') {
   loadGeneralPage();
 }

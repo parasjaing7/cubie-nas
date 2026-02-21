@@ -87,6 +87,7 @@ async def _run_once(cmd: list[str], timeout: int | None = None, input_text: str 
     start = time.monotonic()
     proc = await asyncio.create_subprocess_exec(
         *cmd,
+        stdin=asyncio.subprocess.PIPE if input_text is not None else None,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )

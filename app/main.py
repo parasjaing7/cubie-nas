@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -20,7 +21,28 @@ from .routers import auth, bonus, files, monitoring, network, services, sharing,
 from .security import decode_token
 from .security import hash_password
 
-app = FastAPI(title=settings.app_name)
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    if settings.jwt_secret == 'change-me':
+        raise RuntimeError('Refusing to start with insecure default JWT secret. Set JWT_SECRET in .env')
+
+    Path(settings.nas_root).mkdir(parents=True, exist_ok=True)
+    Base.metadata.create_all(bind=engine)
+
+    db: Session = SessionLocal()
+    try:
+        if not db.query(User).first():
+            admin = User(username='admin', password_hash=hash_password('admin12345'), role='admin')
+            db.add(admin)
+            db.commit()
+    finally:
+        db.close()
+
+    yield
+
+
+app = FastAPI(title=settings.app_name, lifespan=lifespan)
 logger = logging.getLogger(__name__)
 
 _SECURITY_HEADERS = {
@@ -146,24 +168,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     return _apply_security_headers(
         HTMLResponse('<h1>Unexpected error</h1><p>Please retry in a moment.</p>', status_code=500)
     )
-
-
-@app.on_event('startup')
-def startup():
-    if settings.jwt_secret == 'change-me':
-        raise RuntimeError('Refusing to start with insecure default JWT secret. Set JWT_SECRET in .env')
-
-    Path(settings.nas_root).mkdir(parents=True, exist_ok=True)
-    Base.metadata.create_all(bind=engine)
-
-    db: Session = SessionLocal()
-    try:
-        if not db.query(User).first():
-            admin = User(username='admin', password_hash=hash_password('admin12345'), role='admin')
-            db.add(admin)
-            db.commit()
-    finally:
-        db.close()
 
 
 @app.get('/', response_class=HTMLResponse)
