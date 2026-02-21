@@ -315,6 +315,129 @@ Referrer-Policy: strict-origin-when-cross-origin
 
 ---
 
+## PHASE 6 — Production Hardening
+
+### ⬜ TASK 6.1 — Force password change on first login
+> Default `admin12345` ships with production seed — must not remain in use.
+- [ ] Add `must_change_password: bool` column to `User` model (default `True` for seed admin, `False` for API-created users)
+- [ ] Create `templates/force_password_change.html` — minimal form: new password + confirm, no nav/sidebar
+- [ ] In `_require_login()` (app/main.py): if `user.must_change_password is True`, redirect to `/change-password` instead of requested page
+- [ ] Add route `GET /change-password` serving the template (auth-gated, skip `must_change_password` check to avoid redirect loop)
+- [ ] Add route `POST /api/users/me/force-password` — validates new password ≥ 8 chars, hashes it, sets `must_change_password = False`, commits
+- [ ] Exempt `/api/users/me/force-password` and `/change-password` from the redirect guard
+- [ ] Update seed admin creation in `lifespan()` to set `must_change_password=True`
+- [ ] Add test: verify seed admin is redirected to change-password page on first login
+- [ ] Restart and verify: login as admin → forced to change → after change, normal access
+- **Commit:** `feat(task6.1): force password change on first login`
+
+### ⬜ TASK 6.2 — Auto-TLS with self-signed certificate
+> Service listens on plain HTTP (port 8443). Consumer product must default to HTTPS.
+- [ ] In `lifespan()`: check if `settings.tls_cert_file` and `settings.tls_key_file` exist
+- [ ] If missing: call `ensure_self_signed()` from `app/services/ssl.py` to auto-generate self-signed cert+key
+- [ ] Update `systemd/cubie-nas.service` ExecStart to include `--ssl-keyfile` and `--ssl-certfile` flags pointing to config paths
+- [ ] Update CSP header `connect-src` to include `wss:` (already present) — verify no `ws:` only references remain in JS
+- [ ] Add `.env.example` entry documenting TLS cert/key paths
+- [ ] Restart and verify: `curl -kI https://localhost:8443/healthz` returns 200 with security headers
+- [ ] Verify WebSocket connections still work over `wss://`
+- **Commit:** `feat(task6.2): auto-TLS with self-signed certificate`
+
+### ⬜ TASK 6.3 — Session invalidation on password change
+> Existing JWT tokens remain valid after password change until natural expiry.
+- [ ] Add `token_revision: int` column to `User` model (default `0`)
+- [ ] Include `token_revision` (as `rev`) claim in JWT payload when creating token in `create_access_token()`
+- [ ] In `decode_token()` or `get_current_user()`: compare JWT `rev` claim against `user.token_revision` in DB — reject if mismatch
+- [ ] Increment `user.token_revision` in all password-change endpoints: `change_app_password`, `change_my_password`, `force-password`
+- [ ] Add test: change password → old token returns 401
+- [ ] Restart and verify: login, change password, old session redirects to login
+- **Commit:** `feat(task6.3): session invalidation on password change`
+
+### ⬜ TASK 6.4 — Upload file size limit
+> `/api/files/upload` has no size limit — risk of disk exhaustion attack.
+- [ ] Add `max_upload_size_mb: int = 2048` to `Settings` in `app/config.py` (2 GB default, configurable via `.env`)
+- [ ] In `app/routers/files.py` upload endpoint: check `Content-Length` header before reading — reject with 413 if exceeds limit
+- [ ] As fallback: track bytes read in the chunk loop — abort and delete partial file if cumulative size exceeds limit
+- [ ] Return clear error message: `"File exceeds maximum upload size of {limit} MB"`
+- [ ] Add test: upload larger than limit returns 413
+- [ ] Restart and verify: small upload succeeds, oversized upload rejected
+- **Commit:** `feat(task6.4): upload file size limit`
+
+### ⬜ TASK 6.5 — Structured JSON logging
+> Currently uses Python `logging.exception()` — not suitable for production log aggregation.
+- [ ] Add `python-json-logger` to `requirements.txt`
+- [ ] In `app/main.py` or a new `app/logging_config.py`: configure root logger with `pythonjsonlogger.jsonlogger.JsonFormatter`
+- [ ] Log format: `{"timestamp", "level", "logger", "message", "request_id", "path", "method"}`
+- [ ] Add a `request_id` (UUID4) to each request via middleware, include in all log entries for that request
+- [ ] Ensure `unhandled_exception_handler` logs with structured format including traceback
+- [ ] Keep `journalctl` readability: one JSON object per line
+- [ ] Restart and verify: `journalctl -u cubie-nas -n 10 --no-pager` shows JSON lines
+- **Commit:** `feat(task6.5): structured JSON logging with request IDs`
+
+### ⬜ TASK 6.6 — WebSocket token expiry check
+> Dashboard WebSocket connections continue indefinitely after JWT expiry.
+- [ ] In `_monitor_ws_impl()` (app/routers/monitoring.py): add periodic token re-validation every 60 seconds
+- [ ] Extract the cookie token once at connection start, then re-decode it each check cycle — if `decode_token()` raises `ValueError` (expired), send close frame with code 4401 and message "Session expired"
+- [ ] In `/ws/terminal` and `/ws/logs` handlers: add same periodic check (every 60s)
+- [ ] Frontend: in `createReconnectingWebSocket()` — if close code is 4401, redirect to login instead of auto-reconnecting
+- [ ] Add test: mock an expired token mid-session → verify WS closes with 4401
+- [ ] Restart and verify: WS stays open during valid session, closes after token expiry
+- **Commit:** `feat(task6.6): WebSocket token expiry check`
+
+### ⬜ TASK 6.7 — SQLite database backup timer
+> SQLite DB at `/var/lib/cubie-nas/cubie_nas.db` has no automated backup.
+- [ ] Add `GET /api/system/backup-db` endpoint (admin only): runs `sqlite3 /var/lib/cubie-nas/cubie_nas.db ".backup /var/lib/cubie-nas/cubie_nas.db.bak"` via `RealCommandRunner`
+- [ ] Add in-process background task (asyncio): run DB backup every 24 hours, log result
+- [ ] Keep only latest backup (`.bak` file) — no accumulation
+- [ ] Start the background task in `lifespan()` startup, cancel it on shutdown
+- [ ] Add "Last DB Backup" timestamp to Settings page About section
+- [ ] Restart and verify: manual backup via API works, background task logs first run
+- **Commit:** `feat(task6.7): SQLite database backup timer`
+
+### ⬜ TASK 6.8 — Deep health endpoint
+> `/healthz` only returns `{"ok": true}` — insufficient for production monitoring.
+- [ ] Rename existing `/healthz` to keep it as a lightweight liveness probe (no change)
+- [ ] Add `GET /api/system/health` (auth-gated) returning deep check:
+  ```json
+  {
+    "ok": true,
+    "checks": {
+      "database": {"ok": true, "latency_ms": 2},
+      "disk_root": {"ok": true, "free_gb": 12.4, "warning": false},
+      "disk_nas": {"ok": true, "free_gb": 44.1, "warning": false},
+      "memory": {"ok": true, "used_mb": 85, "limit_mb": 300, "warning": false}
+    },
+    "uptime_seconds": 86400,
+    "version": "1.0.0"
+  }
+  ```
+- [ ] Database check: execute `SELECT 1` with 2-second timeout
+- [ ] Disk checks: warn if any mountpoint has <10% free space
+- [ ] Memory check: read `MemoryCurrent` from systemd cgroup, warn if >80% of `MemoryMax`
+- [ ] Top-level `ok` is `false` if any check fails
+- [ ] Display health status on Settings page About section
+- [ ] Restart and verify: endpoint returns all checks, Settings page shows status
+- **Commit:** `feat(task6.8): deep health endpoint with DB, disk, and memory checks`
+
+### ⬜ TASK 6.9 — Remove orphan General page
+> `/general` route exists with full `loadGeneralPage()` in router.js but is not linked from sidebar nav.
+- [ ] Remove route `GET /general` from `app/main.py`
+- [ ] Delete `templates/general.html`
+- [ ] Remove `loadGeneralPage()` function and its `generalWsController` variable from `static/js/router.js`
+- [ ] Remove the `if (page === 'general')` dispatch block at bottom of router.js
+- [ ] Verify no other template or JS references `/general`
+- [ ] Restart and verify: all pages load, no 500 errors in logs
+- **Commit:** `feat(task6.9): remove orphan general page`
+
+### ⬜ TASK 6.10 — Docker feature gating
+> `/api/bonus/docker/*` endpoints return errors if Docker isn't installed. UI should handle this gracefully.
+- [ ] Add `GET /api/bonus/docker/available` endpoint: returns `{"available": true/false}` based on `which docker` exit code (cache result for 60s)
+- [ ] In dashboard or NAS page: check Docker availability before rendering Docker-related UI elements
+- [ ] If Docker not available: show disabled card or hide Docker section entirely, with message "Docker not installed"
+- [ ] Existing Docker endpoints: return 404 with `"Docker is not installed on this system"` instead of raw command errors when Docker binary is missing
+- [ ] Restart and verify: without Docker → graceful UI; with Docker → containers list works
+- **Commit:** `feat(task6.10): Docker feature gating`
+
+---
+
 ## RULES FOR AGENT (non-negotiable)
 
 - After EVERY task: `sudo systemctl restart cubie-nas && sleep 5 && sudo systemctl is-active cubie-nas` — must return `active`. On failure: read `journalctl -u cubie-nas -n 50 --no-pager`, fix, restart again.
