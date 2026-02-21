@@ -51,3 +51,16 @@
 
 ### Summary
 - Runtime is now stable for dashboard use: cards stay populated, APIs remain `200` under repeated polling, and both recursion and null-element overview errors are resolved in deployed code.
+
+### Verification Checklist (Post-Deploy)
+- Service health: `systemctl is-active cubie-nas` returns `active`.
+- App health: `GET /health` returns `200` and healthy payload.
+- Auth flow: `POST /api/auth/login` returns `200` and sets `access_token` + `csrf_token` cookies.
+- Dashboard shell: `GET /overview` returns `200` and includes current static asset version tags.
+- Dashboard data APIs (authenticated):
+	- `/api/storage/devices` -> `200`
+	- `/api/services/status` -> `200`
+	- `/api/sharing/connections` -> `200`
+	- `/api/monitor/syncthing/status` -> `200`
+- Polling stability: run 4 key dashboard APIs repeatedly for ~10-15s and confirm no non-`200` responses.
+- Browser cache sanity: perform hard refresh (`Ctrl+Shift+R`) after frontend asset version bumps.
