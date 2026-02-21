@@ -21,7 +21,7 @@
           <p class="nav-group-title">Consumer</p>
           <a href="/overview" class="nav-link {% if page == 'overview' %}active{% endif %}">Dashboard</a>
           <a href="/files" class="nav-link {% if page == 'files' %}active{% endif %}">Files</a>
-          <a href="/nas" class="nav-link {% if page == 'nas' %}active{% endif %}">Sharing</a>
+          <a href="/sharing" class="nav-link {% if page == 'sharing' %}active{% endif %}">Sharing</a>
           <a href="/users" class="nav-link {% if page == 'users' %}active{% endif %}">Users</a>
           <a href="/settings" class="nav-link {% if page == 'settings' %}active{% endif %}">Settings</a>
         </div>
@@ -32,6 +32,7 @@
         </button>
 
         <div class="nav-group advanced-nav" id="advanced-nav" hidden>
+          <a href="/nas" class="nav-link {% if page == 'nas' %}active{% endif %}">NAS ⚡</a>
           <a href="/terminal" class="nav-link {% if page == 'terminal' %}active{% endif %}">Terminal ⚡</a>
           <a href="/logs" class="nav-link {% if page == 'logs' %}active{% endif %}">Logs ⚡</a>
           <a href="/storage" class="nav-link {% if page == 'storage' %}active{% endif %}">Storage ⚡</a>
@@ -72,6 +73,36 @@
         item.classList.add('toast-hide');
         setTimeout(() => item.remove(), 220);
       }, 4000);
+    };
+
+    window.setButtonBusy = function setButtonBusy(button, busy, label) {
+      if (!(button instanceof HTMLButtonElement)) return;
+      if (busy) {
+        if (!button.dataset.originalHtml) {
+          button.dataset.originalHtml = button.innerHTML;
+        }
+        button.disabled = true;
+        button.classList.add('is-busy');
+        const text = label || button.dataset.busyLabel || 'Working...';
+        button.innerHTML = `<span class="btn-spinner" aria-hidden="true"></span><span>${text}</span>`;
+        return;
+      }
+
+      button.disabled = false;
+      button.classList.remove('is-busy');
+      if (button.dataset.originalHtml) {
+        button.innerHTML = button.dataset.originalHtml;
+        delete button.dataset.originalHtml;
+      }
+    };
+
+    window.withBusyButton = async function withBusyButton(button, fn, label) {
+      window.setButtonBusy(button, true, label);
+      try {
+        return await fn();
+      } finally {
+        window.setButtonBusy(button, false);
+      }
     };
 
     window.api = async function api(path, options = {}) {

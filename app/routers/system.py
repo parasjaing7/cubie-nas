@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import os
+import platform
 import re
+import time
 from collections import deque
+from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -14,7 +18,7 @@ from ..config import settings
 from ..db import SessionLocal
 from ..deps import get_current_user, require_admin
 from ..models import User
-from ..schemas import ApiResponse
+from ..schemas import ApiResponse, HostnameUpdateRequest, TimezoneUpdateRequest
 from ..security import decode_token
 from ..services.system_info import get_general_info
 from ..services.ssl import ensure_self_signed
@@ -263,6 +267,56 @@ async def logs_ws(websocket: WebSocket):
 @router.get('/general-info')
 def general_info(_: object = Depends(get_current_user)):
     return {'ok': True, 'data': get_general_info()}
+
+
+@router.get('/device-info')
+async def device_info(_: object = Depends(get_current_user)):
+    hostname_result = await _runner.run(['hostnamectl', '--static'])
+    tz_result = await _runner.run(['timedatectl', 'show', '-p', 'Timezone', '--value'])
+    uname_result = await _runner.run(['uname', '-r'])
+
+    app_version = 'dev'
+    version_file = Path('VERSION')
+    if version_file.exists():
+        app_version = version_file.read_text(encoding='utf-8').strip() or 'dev'
+
+    return {
+        'ok': True,
+        'data': {
+            'hostname': hostname_result.stdout.strip() if hostname_result.exit_code == 0 else platform.node(),
+            'os': f"{platform.system()} {platform.release()}",
+            'kernel': uname_result.stdout.strip() if uname_result.exit_code == 0 else platform.release(),
+            'timezone': tz_result.stdout.strip() if tz_result.exit_code == 0 else 'UTC',
+            'current_time': datetime.now(timezone.utc).astimezone().isoformat(),
+            'uptime_seconds': int(time.time() - os.stat('/proc/1').st_ctime) if Path('/proc/1').exists() else 0,
+            'app_version': app_version,
+        },
+    }
+
+
+@router.get('/timezones')
+async def list_timezones(_: object = Depends(get_current_user)):
+    result = await _runner.run(['timedatectl', 'list-timezones'])
+    if result.exit_code != 0:
+        raise HTTPException(status_code=400, detail=result.stderr or result.stdout)
+    zones = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    return {'ok': True, 'data': zones}
+
+
+@router.post('/hostname')
+async def update_hostname(payload: HostnameUpdateRequest, _: object = Depends(require_admin)):
+    result = await _runner.run(['hostnamectl', 'set-hostname', payload.hostname])
+    if result.exit_code != 0:
+        raise HTTPException(status_code=400, detail=result.stderr or result.stdout)
+    return ApiResponse(ok=True, message='Hostname updated')
+
+
+@router.post('/timezone')
+async def update_timezone(payload: TimezoneUpdateRequest, _: object = Depends(require_admin)):
+    result = await _runner.run(['timedatectl', 'set-timezone', payload.timezone])
+    if result.exit_code != 0:
+        raise HTTPException(status_code=400, detail=result.stderr or result.stdout)
+    return ApiResponse(ok=True, message='Timezone updated')
 
 
 @router.post('/tls/generate')

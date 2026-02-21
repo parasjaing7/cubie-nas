@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from pathlib import Path
 
@@ -15,11 +16,12 @@ from .config import settings
 from .db import Base, SessionLocal, engine
 from .deps import enforce_csrf
 from .models import User
-from .routers import auth, bonus, files, monitoring, network, services, storage, system, users
+from .routers import auth, bonus, files, monitoring, network, services, sharing, storage, system, users
 from .security import decode_token
 from .security import hash_password
 
 app = FastAPI(title=settings.app_name)
+logger = logging.getLogger(__name__)
 
 _SECURITY_HEADERS = {
     'Content-Security-Policy': "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net; connect-src 'self' wss:",
@@ -122,6 +124,17 @@ async def security_middleware(request: Request, call_next):
     return _apply_security_headers(response)
 
 
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception('Unhandled exception on %s %s', request.method, request.url.path)
+    message = 'Internal server error. Please try again.'
+    if request.url.path.startswith('/api/'):
+        return _apply_security_headers(JSONResponse({'detail': message}, status_code=500))
+    return _apply_security_headers(
+        HTMLResponse('<h1>Unexpected error</h1><p>Please retry in a moment.</p>', status_code=500)
+    )
+
+
 @app.on_event('startup')
 def startup():
     if settings.jwt_secret == 'change-me':
@@ -152,7 +165,7 @@ def overview_page(request: Request):
     redirect = _require_login(request)
     if redirect:
         return redirect
-    return templates.TemplateResponse('overview.html', {'request': request, 'page': 'overview'})
+    return templates.TemplateResponse('dashboard.html', {'request': request, 'page': 'overview'})
 
 
 @app.get('/dashboard', response_class=HTMLResponse)
@@ -167,7 +180,7 @@ def users_page(request: Request):
     redirect = _require_login(request)
     if redirect:
         return redirect
-    return templates.TemplateResponse('users_page.html', {'request': request, 'page': 'users'})
+    return templates.TemplateResponse('users.html', {'request': request, 'page': 'users'})
 
 
 @app.get('/settings', response_class=HTMLResponse)
@@ -175,7 +188,7 @@ def settings_page(request: Request):
     redirect = _require_login(request)
     if redirect:
         return redirect
-    return templates.TemplateResponse('settings_page.html', {'request': request, 'page': 'settings'})
+    return templates.TemplateResponse('settings.html', {'request': request, 'page': 'settings'})
 
 
 def _require_login(request: Request):
@@ -224,7 +237,7 @@ def files_page(request: Request):
     redirect = _require_login(request)
     if redirect:
         return redirect
-    return templates.TemplateResponse('file_manager_page.html', {'request': request, 'page': 'files'})
+    return templates.TemplateResponse('files.html', {'request': request, 'page': 'files'})
 
 
 @app.get('/services', response_class=HTMLResponse)
@@ -251,6 +264,14 @@ def nas_page(request: Request):
     return templates.TemplateResponse('nas_page.html', {'request': request, 'page': 'nas'})
 
 
+@app.get('/sharing', response_class=HTMLResponse)
+def sharing_page(request: Request):
+    redirect = _require_login(request)
+    if redirect:
+        return redirect
+    return templates.TemplateResponse('sharing.html', {'request': request, 'page': 'sharing'})
+
+
 @app.get('/healthz')
 def healthz():
     return {'ok': True}
@@ -260,9 +281,11 @@ app.include_router(auth.router)
 app.include_router(storage.router)
 app.include_router(files.router)
 app.include_router(monitoring.router)
+app.include_router(monitoring.ws_router)
 app.include_router(services.router)
 app.include_router(users.router)
 app.include_router(system.router)
 app.include_router(system.ui_router)
 app.include_router(bonus.router)
 app.include_router(network.router)
+app.include_router(sharing.router)

@@ -1,0 +1,181 @@
+{% extends 'base.html' %}
+{% set page = 'users' %}
+
+{% block title %}Users{% endblock %}
+
+{% block content %}
+<section class="panel users-shell">
+  <div class="panel-head">
+    <h3>Users</h3>
+    <button type="button" id="users-open-add">Add User</button>
+  </div>
+  <div id="users-grid" class="users-grid"></div>
+</section>
+
+<aside id="users-drawer" class="sharing-drawer" hidden>
+  <div class="sharing-drawer-card">
+    <div class="panel-head">
+      <h3 id="users-drawer-title">Add User</h3>
+      <button type="button" id="users-close-drawer" class="ghost-btn">Close</button>
+    </div>
+
+    <div class="row"><input id="users-name" placeholder="Name" /></div>
+    <div class="row"><input id="users-password" type="password" placeholder="Password" /></div>
+    <div class="row"><input id="users-confirm" type="password" placeholder="Confirm Password" /></div>
+    <div class="row">
+      <label>Role</label>
+      <select id="users-role">
+        <option value="user">User</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <button type="button" id="users-submit">Save</button>
+    </div>
+  </div>
+</aside>
+
+<script>
+(() => {
+  const el = {
+    grid: document.getElementById('users-grid'),
+    openAdd: document.getElementById('users-open-add'),
+    drawer: document.getElementById('users-drawer'),
+    closeDrawer: document.getElementById('users-close-drawer'),
+    title: document.getElementById('users-drawer-title'),
+    name: document.getElementById('users-name'),
+    password: document.getElementById('users-password'),
+    confirm: document.getElementById('users-confirm'),
+    role: document.getElementById('users-role'),
+    submit: document.getElementById('users-submit'),
+  };
+
+  const state = {
+    mode: 'create',
+    editing: '',
+  };
+
+  function initials(name) {
+    return String(name || '?').slice(0, 2).toUpperCase();
+  }
+
+  function openDrawer(mode, username = '', role = 'user') {
+    state.mode = mode;
+    state.editing = username;
+    el.drawer.hidden = false;
+    el.title.textContent = mode === 'edit' ? `Edit ${username}` : 'Add User';
+    el.name.value = mode === 'edit' ? username : '';
+    el.name.disabled = mode === 'edit';
+    el.role.value = role;
+    el.password.value = '';
+    el.confirm.value = '';
+    el.password.placeholder = mode === 'edit' ? 'New password (optional)' : 'Password';
+  }
+
+  function closeDrawer() {
+    el.drawer.hidden = true;
+  }
+
+  function card(user) {
+    const roleClass = user.role === 'admin' ? 'status-chip status-online' : 'status-chip';
+    return `
+      <article class="users-card">
+        <div class="users-avatar">${initials(user.username)}</div>
+        <div>
+          <strong>${user.username}</strong>
+          <div><span class="${roleClass}">${user.role}</span></div>
+        </div>
+        <div class="row">
+          <button type="button" class="ghost-btn" data-edit="${user.username}" data-role="${user.role}">Edit</button>
+          <button type="button" class="danger-btn" data-delete="${user.username}">Delete</button>
+        </div>
+      </article>
+    `;
+  }
+
+  async function loadUsers() {
+    el.grid.innerHTML = '<div class="muted">Loading users…</div>';
+    try {
+      const users = await window.api('/api/users/app');
+      const rows = Array.isArray(users) ? users : [];
+      el.grid.innerHTML = rows.length ? rows.map(card).join('') : '<div class="muted">No users</div>';
+    } catch (err) {
+      el.grid.innerHTML = `<div class="muted">Failed to load users: ${err.message}</div>`;
+    }
+  }
+
+  function validatePasswords() {
+    const p1 = el.password.value;
+    const p2 = el.confirm.value;
+    if (p1 !== p2) {
+      window.toast('Passwords do not match', 'error');
+      return false;
+    }
+    if (state.mode === 'create' && !p1) {
+      window.toast('Password is required', 'error');
+      return false;
+    }
+    return true;
+  }
+
+  async function saveUser() {
+    const username = el.name.value.trim();
+    const role = el.role.value;
+    const password = el.password.value;
+
+    if (!username) {
+      window.toast('Name is required', 'error');
+      return;
+    }
+    if (!validatePasswords()) return;
+
+    if (state.mode === 'create') {
+      await window.api('/api/users/app', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({username, password, role}),
+      });
+      window.toast('User created', 'success');
+    } else {
+      await window.api(`/api/users/app/${encodeURIComponent(state.editing)}`, {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({role, new_password: password || null}),
+      });
+      window.toast('User updated', 'success');
+    }
+
+    closeDrawer();
+    await loadUsers();
+  }
+
+  async function removeUser(username) {
+    if (!confirm(`This will remove access for ${username}. Continue?`)) return;
+    await window.api(`/api/users/app/${encodeURIComponent(username)}`, {method: 'DELETE'});
+    window.toast('User deleted', 'success');
+    await loadUsers();
+  }
+
+  el.openAdd.addEventListener('click', () => openDrawer('create'));
+  el.closeDrawer.addEventListener('click', closeDrawer);
+  el.submit.addEventListener('click', saveUser);
+
+  el.grid.addEventListener('click', (event) => {
+    const t = event.target;
+    if (!(t instanceof Element)) return;
+
+    const edit = t.getAttribute('data-edit');
+    if (edit) {
+      openDrawer('edit', edit, t.getAttribute('data-role') || 'user');
+      return;
+    }
+
+    const del = t.getAttribute('data-delete');
+    if (del) removeUser(del);
+  });
+
+  loadUsers();
+})();
+</script>
+{% endblock %}

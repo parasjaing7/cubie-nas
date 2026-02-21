@@ -710,6 +710,9 @@ async function loadNetworkPage() {
 
 async function saveNetworkSettings(ev) {
   ev.preventDefault();
+  const submitBtn = ev.submitter instanceof HTMLButtonElement
+    ? ev.submitter
+    : document.querySelector('#network-form button[type="submit"]');
   const payload = {
     interface: document.getElementById('n-iface').value,
     mode: document.getElementById('n-mode').value,
@@ -718,6 +721,7 @@ async function saveNetworkSettings(ev) {
     dns: document.getElementById('n-dns').value || null,
   };
   const msg = document.getElementById('network-msg');
+  window.setButtonBusy(submitBtn, true, 'Saving...');
   try {
     const res = await api('/api/network/save', {
       method: 'POST',
@@ -728,6 +732,8 @@ async function saveNetworkSettings(ev) {
     await loadNetworkPage();
   } catch (err) {
     msg.textContent = err.message;
+  } finally {
+    window.setButtonBusy(submitBtn, false);
   }
 }
 
@@ -741,6 +747,9 @@ async function loadNasPage() {
 async function smbAction(action) {
   const msg = document.getElementById('smb-msg');
   msg.textContent = '';
+  if ((action === 'stop' || action === 'disable') && !confirm(`Confirm ${action} Samba service?`)) {
+    return;
+  }
   try {
     const res = await api(`/api/services/${action}`, {
       method: 'POST',
@@ -832,6 +841,9 @@ async function loadNvmeDevices() {
 
 async function provisionUsbShare(ev) {
   ev.preventDefault();
+  const submitBtn = ev.submitter instanceof HTMLButtonElement
+    ? ev.submitter
+    : document.querySelector('#usb-share-form button[type="submit"]');
   const msg = document.getElementById('usb-msg');
   const format = document.getElementById('usb-format').checked;
   const device = document.getElementById('usb-device').value;
@@ -875,6 +887,7 @@ async function provisionUsbShare(ev) {
 
   const steps = buildProvisionSteps(payload);
   startProvisionProgress(`USB Provision (${device})`, steps);
+  window.setButtonBusy(submitBtn, true, 'Provisioning...');
 
   try {
     const res = await api('/api/storage/usb/provision-smb', {
@@ -897,11 +910,16 @@ async function provisionUsbShare(ev) {
   } catch (err) {
     msg.textContent = err.message;
     completeProvisionError(err.message);
+  } finally {
+    window.setButtonBusy(submitBtn, false);
   }
 }
 
 async function provisionNvmeShare(ev) {
   ev.preventDefault();
+  const submitBtn = ev.submitter instanceof HTMLButtonElement
+    ? ev.submitter
+    : document.querySelector('#nvme-share-form button[type="submit"]');
   const msg = document.getElementById('nvme-msg');
   const format = document.getElementById('nvme-format').checked;
   const device = document.getElementById('nvme-device').value;
@@ -945,6 +963,7 @@ async function provisionNvmeShare(ev) {
 
   const steps = buildProvisionSteps(payload);
   startProvisionProgress(`NVMe Provision (${device})`, steps);
+  window.setButtonBusy(submitBtn, true, 'Provisioning...');
 
   try {
     const res = await api('/api/storage/nvme/provision-smb', {
@@ -967,6 +986,8 @@ async function provisionNvmeShare(ev) {
   } catch (err) {
     msg.textContent = err.message;
     completeProvisionError(err.message);
+  } finally {
+    window.setButtonBusy(submitBtn, false);
   }
 }
 

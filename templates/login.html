@@ -15,24 +15,37 @@
       <input type="text" name="username" required />
       <label>Password</label>
       <input type="password" name="password" required />
-      <button type="submit">Sign In</button>
+      <button type="submit" id="login-submit">Sign In</button>
       <p id="login-error" class="error"></p>
     </form>
   </main>
   <script>
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
+      const btn = e.submitter instanceof HTMLButtonElement
+        ? e.submitter
+        : document.getElementById('login-submit');
+      const original = btn.innerHTML;
+      btn.disabled = true;
+      btn.classList.add('is-busy');
+      btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span><span>Signing in...</span>';
       const fd = new FormData(e.target);
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ username: fd.get('username'), password: fd.get('password') })
-      });
-      if (res.ok) {
-        location.href = '/overview';
-      } else {
-        const data = await res.json();
-        document.getElementById('login-error').textContent = data.detail || 'Login failed';
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ username: fd.get('username'), password: fd.get('password') })
+        });
+        if (res.ok) {
+          location.href = '/overview';
+        } else {
+          const data = await res.json();
+          document.getElementById('login-error').textContent = data.detail || 'Login failed';
+        }
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove('is-busy');
+        btn.innerHTML = original;
       }
     });
   </script>

@@ -4,7 +4,6 @@ import asyncio
 import shlex
 import time
 from dataclasses import dataclass
-from subprocess import Process
 from typing import Protocol
 
 from ..config import settings

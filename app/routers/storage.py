@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..deps import get_current_user, require_admin
 from ..schemas import ApiResponse, DriveFormatRequest, MountRequest, UsbShareRequest
-from ..services.storage import list_drives, smart_status
+from ..services.storage import list_drives, list_storage_devices, smart_status
 from ..services.system_cmd import RealCommandRunner
 from ..services.usb_share import provision_nvme_share, provision_usb_share
 
@@ -19,6 +19,12 @@ async def drives(include_smart: bool = Query(default=False), _=Depends(get_curre
     if include_smart:
         for d in data:
             d['smart_status'] = await smart_status(d['device'])
+    return {'ok': True, 'data': data}
+
+
+@router.get('/devices')
+async def devices(_=Depends(get_current_user)):
+    data = await list_storage_devices()
     return {'ok': True, 'data': data}
 
 

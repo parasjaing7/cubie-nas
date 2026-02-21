@@ -63,6 +63,39 @@ class MkdirRequest(BaseModel):
     name: str
 
 
+class BulkDownloadRequest(BaseModel):
+    paths: list[str]
+
+
+class ShareCreateRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=64, pattern=r'^[A-Za-z0-9_-]+$')
+    folder: str
+    access: str = Field(pattern='^(everyone|specific)$')
+    users: list[str] = Field(default_factory=list)
+
+
+class ShareRemoveRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=64, pattern=r'^[A-Za-z0-9_-]+$')
+
+
+class UserUpdateRequest(BaseModel):
+    role: str = Field(pattern='^(admin|user)$')
+    new_password: Optional[str] = Field(default=None, min_length=8, max_length=128)
+
+
+class HostnameUpdateRequest(BaseModel):
+    hostname: str = Field(min_length=2, max_length=64, pattern=r'^[A-Za-z0-9][A-Za-z0-9-]*$')
+
+
+class TimezoneUpdateRequest(BaseModel):
+    timezone: str = Field(min_length=2, max_length=128)
+
+
+class SelfPasswordChangeRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class DriveInfo(BaseModel):
     name: str
     device: str

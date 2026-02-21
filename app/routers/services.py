@@ -17,6 +17,15 @@ async def list_services(_=Depends(get_current_user)):
     return {'ok': True, 'data': data}
 
 
+@router.get('/status')
+async def status(_=Depends(get_current_user)):
+    ordered = ['samba', 'ssh', 'nfs', 'ftp']
+    data = []
+    for name in ordered:
+        data.append(await service_status(name))
+    return {'ok': True, 'data': data}
+
+
 @router.post('/restart')
 async def restart(payload: ServiceActionRequest, _=Depends(require_admin)):
     rc, out, err = await service_action(payload.service, 'restart')

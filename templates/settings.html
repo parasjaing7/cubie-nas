@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+{% set page = 'settings' %}
+
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+<div class="cards-grid">
+  <article class="card">
+    <h3>Device Info</h3>
+    <div class="kv"><span>Hostname</span><strong id="set-hostname-val">-</strong></div>
+    <div class="row">
+      <input id="set-hostname-input" placeholder="hostname" />
+      <button type="button" id="set-hostname-save">Save</button>
+    </div>
+    <div class="kv"><span>OS</span><strong id="set-os">-</strong></div>
+    <div class="kv"><span>Kernel</span><strong id="set-kernel">-</strong></div>
+  </article>
+
+  <article class="card">
+    <h3>Network</h3>
+    <div class="kv"><span>IP Address</span><strong id="set-ip">-</strong></div>
+    <div class="kv"><span>MAC</span><strong id="set-mac">-</strong></div>
+  </article>
+
+  <article class="card">
+    <h3>Time</h3>
+    <div class="kv"><span>Current Time</span><strong id="set-time">-</strong></div>
+    <div class="row">
+      <select id="set-timezone"></select>
+      <button type="button" id="set-timezone-save">Apply</button>
+    </div>
+  </article>
+
+  <article class="card">
+    <h3>Security</h3>
+    <div class="row"><input id="set-cur-pass" type="password" placeholder="Current password" /></div>
+    <div class="row"><input id="set-new-pass" type="password" placeholder="New password" /></div>
+    <div class="row"><input id="set-new-pass2" type="password" placeholder="Confirm new password" /></div>
+    <button type="button" id="set-pass-save">Change Password</button>
+  </article>
+
+  <article class="card">
+    <h3>About</h3>
+    <div class="kv"><span>App Version</span><strong id="set-version">-</strong></div>
+    <div class="kv"><span>Uptime</span><strong id="set-uptime">-</strong></div>
+    <div class="row"><a href="/logs" class="nav-link">Open Logs</a></div>
+  </article>
+</div>
+
+<script>
+(() => {
+  function uptimeText(sec) {
+    const s = Number(sec || 0);
+    const d = Math.floor(s / 86400);
+    const h = Math.floor((s % 86400) / 3600);
+    return `${d}d ${h}h`;
+  }
+
+  async function loadSettingsData() {
+    const [deviceRes, networkRes, linksRes] = await Promise.all([
+      window.api('/api/system/device-info'),
+      window.api('/api/network/current'),
+      window.api('/api/network/state').catch(() => ({data: {ethernet: {ports: []}}})),
+    ]);
+
+    const d = deviceRes.data || {};
+    const n = networkRes.data || {};
+    const st = linksRes.data || {};
+
+    document.getElementById('set-hostname-val').textContent = d.hostname || '-';
+    document.getElementById('set-hostname-input').value = d.hostname || '';
+    document.getElementById('set-os').textContent = d.os || '-';
+    document.getElementById('set-kernel').textContent = d.kernel || '-';
+    document.getElementById('set-time').textContent = d.current_time ? new Date(d.current_time).toLocaleString() : '-';
+    document.getElementById('set-version').textContent = d.app_version || '-';
+    document.getElementById('set-uptime').textContent = uptimeText(d.uptime_seconds);
+
+    document.getElementById('set-ip').textContent = n.ip_address || '-';
+    const firstPort = (st.ethernet && Array.isArray(st.ethernet.ports) && st.ethernet.ports.length) ? st.ethernet.ports[0] : null;
+    document.getElementById('set-mac').textContent = firstPort && firstPort.mac ? firstPort.mac : '-';
+
+    const tzSel = document.getElementById('set-timezone');
+    const tzRes = await window.api('/api/system/timezones');
+    const zones = Array.isArray(tzRes.data) ? tzRes.data : [];
+    tzSel.innerHTML = zones.slice(0, 600).map((z) => `<option value="${z}">${z}</option>`).join('');
+    if (d.timezone) tzSel.value = d.timezone;
+  }
+
+  document.getElementById('set-hostname-save').addEventListener('click', async () => {
+    const hostname = document.getElementById('set-hostname-input').value.trim();
+    await window.api('/api/system/hostname', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({hostname}),
+    });
+    window.toast('Hostname updated', 'success');
+    await loadSettingsData();
+  });
+
+  document.getElementById('set-timezone-save').addEventListener('click', async () => {
+    const timezone = document.getElementById('set-timezone').value;
+    await window.api('/api/system/timezone', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({timezone}),
+    });
+    window.toast('Timezone updated', 'success');
+    await loadSettingsData();
+  });
+
+  document.getElementById('set-pass-save').addEventListener('click', async () => {
+    const current_password = document.getElementById('set-cur-pass').value;
+    const new_password = document.getElementById('set-new-pass').value;
+    const confirm = document.getElementById('set-new-pass2').value;
+    if (new_password !== confirm) {
+      window.toast('New passwords do not match', 'error');
+      return;
+    }
+    await window.api('/api/users/me/password', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({current_password, new_password}),
+    });
+    document.getElementById('set-cur-pass').value = '';
+    document.getElementById('set-new-pass').value = '';
+    document.getElementById('set-new-pass2').value = '';
+    window.toast('Password updated', 'success');
+  });
+
+  loadSettingsData();
+})();
+</script>
+{% endblock %}

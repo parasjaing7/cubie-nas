@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..deps import get_current_user, require_admin
 from ..schemas import ApiResponse, NetworkConfigRequest
-from ..services.network import apply_network_config, current_network_info
+from ..services.network import apply_network_config, current_network_info, network_state
 
 router = APIRouter(prefix='/api/network', tags=['network'])
 
@@ -12,6 +12,11 @@ router = APIRouter(prefix='/api/network', tags=['network'])
 @router.get('/current')
 async def current(_: object = Depends(get_current_user)):
     return {'ok': True, 'data': await current_network_info()}
+
+
+@router.get('/state')
+async def state(_: object = Depends(get_current_user)):
+    return {'ok': True, 'data': await network_state()}
 
 
 @router.post('/save')

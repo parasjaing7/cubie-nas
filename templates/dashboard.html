@@ -1,0 +1,307 @@
+{% extends 'base.html' %}
+{% set page = 'overview' %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-view">
+  <div class="dashboard-grid-v2">
+    <article class="card dashboard-card">
+      <h3>System Health</h3>
+      <div class="system-health-row">
+        <div class="cpu-ring-wrap">
+          <div id="dash-cpu-ring" class="cpu-ring skeleton-block">0%</div>
+          <span class="muted">CPU</span>
+        </div>
+        <div class="health-stats">
+          <div class="kv"><span>RAM</span><strong id="dash-ram-text" class="skeleton-text">-</strong></div>
+          <div class="progress"><span id="dash-ram-bar" class="skeleton-line"></span></div>
+          <div class="kv"><span>Temp</span><strong id="dash-temp" class="skeleton-text">-</strong></div>
+          <div class="kv"><span>Uptime</span><strong id="dash-uptime" class="skeleton-text">-</strong></div>
+        </div>
+      </div>
+    </article>
+
+    <article class="card dashboard-card">
+      <h3>Storage Overview</h3>
+      <div id="dash-storage-list" class="dashboard-list">
+        <div class="skeleton-block"></div>
+        <div class="skeleton-block"></div>
+      </div>
+    </article>
+
+    <article class="card dashboard-card">
+      <h3>Network</h3>
+      <div class="kv"><span>IP Address</span><strong id="dash-ip" class="skeleton-text">-</strong></div>
+      <div class="kv"><span>Upload</span><strong id="dash-tx" class="skeleton-text">-</strong></div>
+      <div class="kv"><span>Download</span><strong id="dash-rx" class="skeleton-text">-</strong></div>
+    </article>
+
+    <article class="card dashboard-card">
+      <h3>Services</h3>
+      <div id="dash-services" class="dashboard-list">
+        <div class="skeleton-line"></div>
+        <div class="skeleton-line"></div>
+        <div class="skeleton-line"></div>
+      </div>
+    </article>
+
+    <article class="card dashboard-card">
+      <h3>Backup</h3>
+      <div id="dash-backup" class="dashboard-list">
+        <div class="skeleton-line"></div>
+        <div class="skeleton-line"></div>
+      </div>
+    </article>
+
+    <article class="card dashboard-card dashboard-span-2">
+      <h3>Active SMB Connections</h3>
+      <div id="dash-connections" class="dashboard-list">
+        <div class="skeleton-line"></div>
+        <div class="skeleton-line"></div>
+      </div>
+    </article>
+  </div>
+</div>
+<script>
+(() => {
+  const el = {
+    cpuRing: document.getElementById('dash-cpu-ring'),
+    ramText: document.getElementById('dash-ram-text'),
+    ramBar: document.getElementById('dash-ram-bar'),
+    temp: document.getElementById('dash-temp'),
+    uptime: document.getElementById('dash-uptime'),
+    ip: document.getElementById('dash-ip'),
+    tx: document.getElementById('dash-tx'),
+    rx: document.getElementById('dash-rx'),
+    storageList: document.getElementById('dash-storage-list'),
+    services: document.getElementById('dash-services'),
+    backup: document.getElementById('dash-backup'),
+    connections: document.getElementById('dash-connections'),
+  };
+
+  function num(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function pct(v) {
+    return `${Math.max(0, Math.min(100, Math.round(num(v))))}%`;
+  }
+
+  function bytesPerSec(v) {
+    const value = num(v);
+    if (value <= 0) return '0 B/s';
+    const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+    let i = 0;
+    let cur = value;
+    while (cur >= 1024 && i < units.length - 1) {
+      cur /= 1024;
+      i += 1;
+    }
+    return `${cur.toFixed(cur >= 100 || i === 0 ? 0 : 1)} ${units[i]}`;
+  }
+
+  function clearSkeleton(...elements) {
+    elements.forEach((node) => {
+      if (!(node instanceof HTMLElement)) return;
+      node.classList.remove('skeleton-text', 'skeleton-line', 'skeleton-block');
+    });
+  }
+
+  function tempClass(c) {
+    if (c >= 75) return 'temp-hot';
+    if (c >= 60) return 'temp-warn';
+    return 'temp-ok';
+  }
+
+  function storageIcon(type) {
+    if (type === 'usb') return '🧩';
+    if (type === 'nvme') return '⚡';
+    return '💾';
+  }
+
+  function updateMonitor(data) {
+    const cpu = num(data?.cpu_percent);
+    clearSkeleton(el.cpuRing, el.ramText, el.ramBar, el.temp, el.uptime, el.ip, el.tx, el.rx);
+    const deg = Math.round((Math.max(0, Math.min(100, cpu)) / 100) * 360);
+    el.cpuRing.style.background = `conic-gradient(var(--accent) ${deg}deg, var(--line) ${deg}deg)`;
+    el.cpuRing.textContent = pct(cpu);
+
+    const memTotal = num(data?.ram_total_mb);
+    const memUsed = num(data?.ram_used_mb);
+    const mem = memTotal > 0 ? (memUsed / memTotal) * 100 : 0;
+    el.ramText.textContent = pct(mem);
+    el.ramBar.style.width = pct(mem);
+
+    const temp = num(data?.temp_c);
+    el.temp.className = tempClass(temp);
+    el.temp.textContent = Number.isFinite(temp) && temp > 0 ? `${temp.toFixed(1)}°C` : '-';
+
+    const up = num(data?.uptime_seconds);
+    const days = Math.floor(up / 86400);
+    const hours = Math.floor((up % 86400) / 3600);
+    el.uptime.textContent = up > 0 ? `${days} days ${hours} hrs` : '-';
+    el.ip.textContent = data?.ip_address || '-';
+    el.tx.textContent = bytesPerSec(data?.net_tx_bps);
+    el.rx.textContent = bytesPerSec(data?.net_rx_bps);
+  }
+
+  function renderStorage(items) {
+    if (!Array.isArray(items) || !items.length) {
+      el.storageList.innerHTML = '<div class="muted">No mounted devices detected</div>';
+      return;
+    }
+    el.storageList.innerHTML = items.map((d) => {
+      const used = num(d?.used_gb);
+      const total = num(d?.total_gb);
+      const free = Math.max(0, total - used);
+      const usedPct = total > 0 ? (used / total) * 100 : 0;
+      return `
+        <div class="storage-item">
+        <div class="kv">
+          <span>${storageIcon(d?.type)} ${d?.label || d?.id || 'Device'}</span>
+          <strong>${used.toFixed(1)} / ${total.toFixed(1)} GB</strong>
+        </div>
+        <div class="progress"><span class="${usedPct > 90 ? 'full' : ''}" style="width:${pct(usedPct)}"></span></div>
+        <div class="muted">Free ${free.toFixed(1)} GB • ${d?.mountpoint || '-'}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderServices(items) {
+    if (!Array.isArray(items) || !items.length) {
+      el.services.innerHTML = '<div class="muted">No services</div>';
+      return;
+    }
+    el.services.innerHTML = items.map((svc) => {
+      const active = Boolean(svc?.active);
+      return `
+        <div class="service-row">
+          <span class="service-label"><span class="status-dot ${active ? 'online' : ''}"></span>${svc?.service || svc?.name || 'service'}</span>
+          <button class="service-toggle" data-service="${svc?.service || ''}" data-active="${active ? '1' : '0'}">${active ? 'OFF' : 'ON'}</button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderConnections(items) {
+    if (!Array.isArray(items) || !items.length) {
+      el.connections.innerHTML = '<div class="muted">No active SMB sessions</div>';
+      return;
+    }
+    el.connections.innerHTML = items.map((c) => `
+      <div class="kv">
+        <span>${c?.user || 'unknown'} @ ${c?.ip_address || '-'}</span>
+        <strong>${c?.connected_since || '-'}</strong>
+      </div>
+    `).join('');
+  }
+
+  function renderBackup(state) {
+    if (!state || !state.running) {
+      el.backup.innerHTML = `
+        <div class="muted">Syncthing not installed — enables automatic phone backup.</div>
+        <a class="muted" href="${state?.learn_more_url || 'https://syncthing.net/'}" target="_blank" rel="noopener noreferrer">Learn More</a>
+      `;
+      return;
+    }
+
+    if (!state.available) {
+      el.backup.innerHTML = `
+        <div class="muted">Syncthing is running, but status details are unavailable.</div>
+        <a class="muted" href="${state?.learn_more_url || 'https://syncthing.net/'}" target="_blank" rel="noopener noreferrer">Learn More</a>
+      `;
+      return;
+    }
+
+    el.backup.innerHTML = `
+      <div class="kv"><span>Device ID</span><strong title="${state?.device_id || '-'}">${state?.device_id_short || '-'}</strong></div>
+      <div class="kv"><span>Folders Syncing</span><strong>${num(state?.folders_syncing)}</strong></div>
+      <div class="kv"><span>Last Sync</span><strong>${state?.last_sync_time || '-'}</strong></div>
+    `;
+  }
+
+  async function pullStorage() {
+    try {
+      const data = await window.api('/api/storage/devices');
+      renderStorage(data?.data || []);
+    } catch {
+      renderStorage([]);
+    }
+  }
+
+  async function pullServices() {
+    try {
+      const data = await window.api('/api/services/status');
+      renderServices(data?.data || []);
+    } catch {
+      renderServices([]);
+    }
+  }
+
+  async function pullConnections() {
+    try {
+      const data = await window.api('/api/sharing/connections');
+      renderConnections(data?.data || []);
+    } catch {
+      renderConnections([]);
+    }
+  }
+
+  async function pullBackup() {
+    try {
+      const data = await window.api('/api/monitor/syncthing/status');
+      renderBackup(data?.data || null);
+    } catch {
+      renderBackup(null);
+    }
+  }
+
+  window.createReconnectingWebSocket('/ws/monitor', {
+    onmessage(event) {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg && typeof msg === 'object') updateMonitor(msg);
+      } catch {
+      }
+    },
+  });
+
+  pullStorage();
+  pullServices();
+  pullBackup();
+  pullConnections();
+
+  setInterval(pullStorage, 30000);
+  setInterval(pullServices, 15000);
+  setInterval(pullBackup, 30000);
+  setInterval(pullConnections, 30000);
+
+  el.services.addEventListener('click', async (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLButtonElement) || !target.classList.contains('service-toggle')) return;
+
+    const service = target.dataset.service || '';
+    const active = target.dataset.active === '1';
+    if (!service) return;
+    if (active && !confirm(`Stop service ${service}?`)) return;
+
+    window.setButtonBusy(target, true, active ? 'Stopping...' : 'Starting...');
+    try {
+      await window.api(`/api/services/${active ? 'stop' : 'start'}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({service}),
+      });
+      await pullServices();
+      window.toast(`${service} ${active ? 'stopped' : 'started'}`, 'success');
+    } catch {
+    } finally {
+      window.setButtonBusy(target, false);
+    }
+  });
+})();
+</script>
+{% endblock %}

@@ -47,6 +47,21 @@ def read_temp_c() -> float | None:
     return None
 
 
+def read_primary_ip() -> str:
+    try:
+        addrs = psutil.net_if_addrs()
+    except Exception:
+        return '-'
+
+    for iface, records in addrs.items():
+        if iface.startswith('lo'):
+            continue
+        for rec in records:
+            if rec.family.name == 'AF_INET' and rec.address:
+                return rec.address
+    return '-'
+
+
 def read_stats(sampler: RateSampler) -> dict:
     vm = psutil.virtual_memory()
     rates = sampler.sample()
@@ -55,6 +70,7 @@ def read_stats(sampler: RateSampler) -> dict:
         'ram_used_mb': round(vm.used / (1024 * 1024), 1),
         'ram_total_mb': round(vm.total / (1024 * 1024), 1),
         'temp_c': read_temp_c(),
+        'ip_address': read_primary_ip(),
         'net_rx_bps': rates['net_rx_bps'],
         'net_tx_bps': rates['net_tx_bps'],
         'disk_read_bps': rates['disk_read_bps'],

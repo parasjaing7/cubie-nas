@@ -9,8 +9,8 @@ from ..config import settings
 from ..db import get_db
 from ..deps import get_current_user, require_admin
 from ..models import User
-from ..schemas import ApiResponse, PasswordChangeRequest, UserCreate, UserOut
-from ..security import hash_password
+from ..schemas import ApiResponse, PasswordChangeRequest, SelfPasswordChangeRequest, UserCreate, UserOut, UserUpdateRequest
+from ..security import hash_password, verify_password
 from ..services.system_cmd import RealCommandRunner
 from ..services.user_ctl import active_sessions, create_system_user, set_system_password
 
@@ -43,6 +43,54 @@ def change_app_password(payload: PasswordChangeRequest, _: User = Depends(requir
     user.password_hash = hash_password(payload.new_password)
     db.commit()
     return ApiResponse(ok=True, message='Password changed')
+
+
+@router.post('/me/password')
+def change_my_password(payload: SelfPasswordChangeRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail='User not found')
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail='Current password is incorrect')
+
+    user.password_hash = hash_password(payload.new_password)
+    db.commit()
+    return ApiResponse(ok=True, message='Password changed')
+
+
+@router.patch('/app/{username}')
+def update_app_user(
+    username: str,
+    payload: UserUpdateRequest,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail='User not found')
+
+    user.role = payload.role
+    if payload.new_password:
+        user.password_hash = hash_password(payload.new_password)
+    db.commit()
+    return ApiResponse(ok=True, message='User updated')
+
+
+@router.delete('/app/{username}')
+def delete_app_user(
+    username: str,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail='User not found')
+    if user.username == current_user.username:
+        raise HTTPException(status_code=400, detail='Cannot delete currently logged-in admin user')
+
+    db.delete(user)
+    db.commit()
+    return ApiResponse(ok=True, message='User deleted')
 
 
 @router.post('/system/create')

@@ -133,11 +133,11 @@ Referrer-Policy: strict-origin-when-cross-origin
 
 ## PHASE 2 — Consumer-Grade Dashboard
 
-### ⬜ TASK 2.1 — Redesign Dashboard
-- [ ] Redesign `templates/dashboard.html` as single-view overview card grid
-- [ ] All data via `fetch()` + WebSocket, no full page reloads
-- [ ] Layout: CSS Grid, 2 columns desktop, 1 column mobile (responsive media query)
-- [ ] Design tokens in CSS:
+### ✅ TASK 2.1 — Redesign Dashboard
+- [x] Redesign `templates/dashboard.html` as single-view overview card grid
+- [x] All data via `fetch()` + WebSocket, no full page reloads
+- [x] Layout: CSS Grid, 2 columns desktop, 1 column mobile (responsive media query)
+- [x] Design tokens in CSS:
   - `--color-bg: #0f1117`
   - `--color-surface: #1a1d2e`
   - `--color-accent: #4F8EF7`
@@ -147,38 +147,38 @@ Referrer-Policy: strict-origin-when-cross-origin
   - `--color-text: #e2e8f0`
   - `--color-muted: #64748b`
   - `--radius: 12px`
-- [ ] **Card 1 — System Health** (live via WebSocket `/ws/monitor`)
+- [x] **Card 1 — System Health** (live via WebSocket `/ws/monitor`)
   - CPU usage %: animated progress ring
   - RAM usage %: animated progress bar showing used/total
   - Temperature: color-coded (green <60°C, yellow <75°C, red ≥75°C)
   - Uptime: human-readable (e.g., "3 days 4 hrs")
-- [ ] **Card 2 — Storage Overview** (fetch `GET /api/storage/devices`, refresh every 30s)
+- [x] **Card 2 — Storage Overview** (fetch `GET /api/storage/devices`, refresh every 30s)
   - One row per detected device: SD Card icon, USB icon, or NVMe icon
   - Each row: device label, used/total, linear progress bar (red if >90% full)
   - Detection via lsblk — SD=mmcblk, USB=TRAN=usb, NVMe=TRAN=nvme
-- [ ] **Card 3 — Network** (live via WebSocket `/ws/monitor`)
+- [x] **Card 3 — Network** (live via WebSocket `/ws/monitor`)
   - Current IP address
   - Upload speed (KB/s or MB/s auto-scaled)
   - Download speed (KB/s or MB/s auto-scaled)
-- [ ] **Card 4 — Services** (fetch `GET /api/services/status`, refresh every 15s)
+- [x] **Card 4 — Services** (fetch `GET /api/services/status`, refresh every 15s)
   - Samba, SSH, NFS, FTP — each row: service name, green/red status dot, toggle ON/OFF button
   - Toggle calls existing service control endpoint, toast on success/error
-- [ ] **Card 5 — Active SMB Connections** (fetch `GET /api/sharing/connections`, refresh every 30s)
+- [x] **Card 5 — Active SMB Connections** (fetch `GET /api/sharing/connections`, refresh every 30s)
   - Parse `smbstatus -j` server-side, expose via new endpoint
   - Show: connected user, IP address, connected since
   - "No active connections" graceful state
-- [ ] Remove all raw JSON debug output
-- [ ] Restart and verify all cards load, live data updates, toggles work
+- [x] Remove all raw JSON debug output
+- [x] Restart and verify all cards load, live data updates, toggles work
 - **Commit:** `feat(task2.1): consumer-grade dashboard with live cards`
 
 ---
 
 ## PHASE 3 — Consumer File Manager
 
-### ⬜ TASK 3.1 — Device detection endpoint
-- [ ] Add `GET /api/storage/devices` to `app/routers/storage.py`
-- [ ] Run `lsblk -J -o NAME,MOUNTPOINT,SIZE,TRAN,TYPE,LABEL,FSTYPE` as subprocess
-- [ ] Parse and return array:
+### ✅ TASK 3.1 — Device detection endpoint
+- [x] Add `GET /api/storage/devices` to `app/routers/storage.py`
+- [x] Run `lsblk -J -o NAME,MOUNTPOINT,SIZE,TRAN,TYPE,LABEL,FSTYPE` as subprocess
+- [x] Parse and return array:
   ```json
   [
     {"id": "mmcblk0", "label": "System SD", "type": "sd", "mountpoint": "/", "total_gb": 32, "used_gb": 8, "free_gb": 24},
@@ -186,30 +186,30 @@ Referrer-Policy: strict-origin-when-cross-origin
     {"id": "nvme0n1", "label": "NVMe Storage", "type": "nvme", "mountpoint": "/mnt/nvme", "total_gb": 256, "used_gb": 100, "free_gb": 156}
   ]
   ```
-- [ ] Only return mounted devices (mountpoint not null/empty)
-- [ ] Cache result for 10 seconds (simple time-based dict cache, no Redis)
-- [ ] Validate all mountpoints are real paths
+- [x] Only return mounted devices (mountpoint not null/empty)
+- [x] Cache result for 10 seconds (simple time-based dict cache, no Redis)
+- [x] Validate all mountpoints are real paths
 - **Commit:** `feat(task3.1): device detection endpoint via lsblk`
 
-### ⬜ TASK 3.2 — File manager security layer
+### ✅ TASK 3.2 — File manager security layer
 > **Audit refs:** §3.13 (upload writes without fsync)
-- [ ] In `app/services/file_ops.py` add `validate_path(requested_path, device_mountpoint)`:
+- [x] In `app/services/file_ops.py` add `validate_path(requested_path, device_mountpoint)`:
   - Resolve real path using `os.path.realpath()`
   - Raise 403 if resolved path does not start with device mountpoint
   - Prevents all path traversal attacks
-- [ ] Apply validation to ALL file operation endpoints (list, read, upload, rename, delete, mkdir, download)
-- [ ] Add `os.fsync()` after upload writes in `app/routers/files.py` to prevent data corruption on power loss (audit §3.13)
-- [ ] Add test in `tests/` verifying path traversal returns 403
-- [ ] Restart and run test
+- [x] Apply validation to ALL file operation endpoints (list, read, upload, rename, delete, mkdir, download)
+- [x] Add `os.fsync()` after upload writes in `app/routers/files.py` to prevent data corruption on power loss (audit §3.13)
+- [x] Add test in `tests/` verifying path traversal returns 403
+- [x] Restart and run test
 - **Commit:** `feat(task3.2): file manager path traversal security layer`
 
-### ⬜ TASK 3.3 — Redesign File Manager UI
-- [ ] Completely replace `templates/files.html` and its JS
-- [ ] **Landing view — Storage Devices:**
+### ✅ TASK 3.3 — Redesign File Manager UI
+- [x] Completely replace `templates/files.html` and its JS
+- [x] **Landing view — Storage Devices:**
   - One card per device from `GET /api/storage/devices`
   - Card: large icon (SD/USB/NVMe inline SVG), device label, size bar, "Browse →" button
   - Undetected devices: greyed-out card with "Not connected"
-- [ ] **Browse view:**
+- [x] **Browse view:**
   - Breadcrumb bar showing path relative to device root (clickable crumbs)
   - Toggle Grid view / List view (preference in localStorage)
   - Grid: folders first (folder icon + name), then files (type icon + name + size)
@@ -220,73 +220,73 @@ Referrer-Policy: strict-origin-when-cross-origin
   - Upload zone: dashed drop zone, click or drag
   - New Folder button in toolbar
   - Back button to device landing
-- [ ] All file operations use existing backend endpoints, toast on success/error
-- [ ] Restart and verify: device cards, browsing, upload, rename, delete, path traversal test passes
+- [x] All file operations use existing backend endpoints, toast on success/error
+- [x] Restart and verify: device cards, browsing, upload, rename, delete, path traversal test passes
 - **Commit:** `feat(task3.3): consumer file manager with device cards and browse view`
 
 ---
 
 ## PHASE 4 — Consumer Supporting Tabs
 
-### ⬜ TASK 4.1 — Simplified Sharing Tab
-- [ ] New `templates/sharing.html`, new route `GET /sharing`
-- [ ] Data from `GET /api/sharing/list` (add endpoint — reads smb.conf shares)
-- [ ] One card per share: share name, path (truncated), access level badge, active connection count
-- [ ] "Add Share" slide-in panel with 3 fields:
+### ✅ TASK 4.1 — Simplified Sharing Tab
+- [x] New `templates/sharing.html`, new route `GET /sharing`
+- [x] Data from `GET /api/sharing/list` (add endpoint — reads smb.conf shares)
+- [x] One card per share: share name, path (truncated), access level badge, active connection count
+- [x] "Add Share" slide-in panel with 3 fields:
   - Share Name (text)
   - Folder (button opens file manager device picker)
   - Access: radio — "Everyone on network" / "Specific users" (shows user multi-select)
-- [ ] On submit: write smb.conf via `testparm` validation, then `smbcontrol smbd reload-config`
-- [ ] "Remove" button: confirm then remove share and reload Samba
-- [ ] Move raw smb.conf editor to Advanced > Services only
-- [ ] Restart and verify share create/delete
+- [x] On submit: write smb.conf via `testparm` validation, then `smbcontrol smbd reload-config`
+- [x] "Remove" button: confirm then remove share and reload Samba
+- [x] Move raw smb.conf editor to Advanced > Services only
+- [x] Restart and verify share create/delete
 - **Commit:** `feat(task4.1): simplified sharing tab with add/remove`
 
-### ⬜ TASK 4.2 — Simplified Users Tab
+### ✅ TASK 4.2 — Simplified Users Tab
 > **Audit refs:** §3.14 (no user delete endpoint)
-- [ ] New `templates/users.html` (replace existing if present)
-- [ ] User cards grid: avatar circle with initials, username, role badge (Admin/User), Edit/Delete buttons
-- [ ] "Add User" slide-in: Name, Password, Confirm Password, Role dropdown
-- [ ] "Edit": change password and role only
-- [ ] Add `DELETE /api/users/app/{username}` endpoint — currently no way to remove users via API (audit §3.14)
-- [ ] Delete: confirmation dialog "This will remove access for [username]"
-- [ ] Hide Linux UID/GID/shell/home — move to Advanced > Services if needed
-- [ ] Restart and verify add, edit, delete
+- [x] New `templates/users.html` (replace existing if present)
+- [x] User cards grid: avatar circle with initials, username, role badge (Admin/User), Edit/Delete buttons
+- [x] "Add User" slide-in: Name, Password, Confirm Password, Role dropdown
+- [x] "Edit": change password and role only
+- [x] Add `DELETE /api/users/app/{username}` endpoint — currently no way to remove users via API (audit §3.14)
+- [x] Delete: confirmation dialog "This will remove access for [username]"
+- [x] Hide Linux UID/GID/shell/home — move to Advanced > Services if needed
+- [x] Restart and verify add, edit, delete
 - **Commit:** `feat(task4.2): simplified users tab with card layout`
 
-### ⬜ TASK 4.3 — Settings Tab
+### ✅ TASK 4.3 — Settings Tab
 > **Audit refs:** §3.1 (missing /api/network/state — CRITICAL), §3.18 (network page missing DOM elements)
-- [ ] New `templates/settings.html`, new route `GET /settings`
-- [ ] **Device Info:** hostname (editable → `hostnamectl set-hostname`), OS version + kernel (read-only from uname)
-- [ ] **Network:** current IP and MAC address (read-only from `ip` command)
-- [ ] **Time:** timezone dropdown (`timedatectl set-timezone`), current time display
-- [ ] **Security:** "Change Admin Password" form (current + new + confirm)
-- [ ] **About:** app version (from VERSION file or constant), uptime, link to Logs tab
-- [ ] Add missing `GET /api/network/state` endpoint or fix JS references — `loadSettingsPage()` and `loadNetworkPage()` both call this non-existent endpoint causing silent failures (audit §3.1 — CRITICAL)
-- [ ] Fix `network_page.html` DOM element references: `eth-chip`, `eth-scan-body`, `wifi-chip`, `bt-chip`, `hotspot-chip` etc. are referenced in JS but don't exist in template (audit §3.18)
-- [ ] Restart and verify all read correctly, editable ones save
+- [x] New `templates/settings.html`, new route `GET /settings`
+- [x] **Device Info:** hostname (editable → `hostnamectl set-hostname`), OS version + kernel (read-only from uname)
+- [x] **Network:** current IP and MAC address (read-only from `ip` command)
+- [x] **Time:** timezone dropdown (`timedatectl set-timezone`), current time display
+- [x] **Security:** "Change Admin Password" form (current + new + confirm)
+- [x] **About:** app version (from VERSION file or constant), uptime, link to Logs tab
+- [x] Add missing `GET /api/network/state` endpoint or fix JS references — `loadSettingsPage()` and `loadNetworkPage()` both call this non-existent endpoint causing silent failures (audit §3.1 — CRITICAL)
+- [x] Fix `network_page.html` DOM element references: `eth-chip`, `eth-scan-body`, `wifi-chip`, `bt-chip`, `hotspot-chip` etc. are referenced in JS but don't exist in template (audit §3.18)
+- [x] Restart and verify all read correctly, editable ones save
 - **Commit:** `feat(task4.3): settings tab with device info, network, time, security`
 
 ---
 
 ## PHASE 5 — Polish & Stability
 
-### ⬜ TASK 5.1 — Loading states and error handling
+### ✅ TASK 5.1 — Loading states and error handling
 > **Audit refs:** §3.5 (no global exception handler — HIGH)
-- [ ] Skeleton loading placeholders on all dashboard cards during fetch (CSS animation, no JS lib)
-- [ ] Add global `@app.exception_handler(Exception)` in `main.py` — currently unhandled exceptions return raw tracebacks exposing internal paths and logic (audit §3.5 — HIGH)
-- [ ] All API errors return user-friendly messages — no raw tracebacks reach browser
-- [ ] All form submissions: disable button + spinner during request, re-enable on completion
-- [ ] All destructive actions: require explicit confirmation dialog
-- [ ] Restart and verify
+- [x] Skeleton loading placeholders on all dashboard cards during fetch (CSS animation, no JS lib)
+- [x] Add global `@app.exception_handler(Exception)` in `main.py` — currently unhandled exceptions return raw tracebacks exposing internal paths and logic (audit §3.5 — HIGH)
+- [x] All API errors return user-friendly messages — no raw tracebacks reach browser
+- [x] All form submissions: disable button + spinner during request, re-enable on completion
+- [x] All destructive actions: require explicit confirmation dialog
+- [x] Restart and verify
 - **Commit:** `feat(task5.1): loading states, error handling, confirmation dialogs`
 
-### ⬜ TASK 5.2 — Syncthing status card (future-ready, non-breaking)
-- [ ] Add "Backup" card to dashboard checking Syncthing on port 8384
-- [ ] If running: show sync status from `http://localhost:8384/rest/system/status` — device ID truncated, folders syncing, last sync time
-- [ ] If not running: greyed card "Syncthing not installed — enables automatic phone backup" with "Learn More" link
-- [ ] Display-only — no Syncthing install/config from this UI
-- [ ] Restart and verify card shows correct state
+### ✅ TASK 5.2 — Syncthing status card (future-ready, non-breaking)
+- [x] Add "Backup" card to dashboard checking Syncthing on port 8384
+- [x] If running: show sync status from `http://localhost:8384/rest/system/status` — device ID truncated, folders syncing, last sync time
+- [x] If not running: greyed card "Syncthing not installed — enables automatic phone backup" with "Learn More" link
+- [x] Display-only — no Syncthing install/config from this UI
+- [x] Restart and verify card shows correct state
 - **Commit:** `feat(task5.2): syncthing backup status card`
 
 ### ⬜ TASK 5.3 — Final memory audit

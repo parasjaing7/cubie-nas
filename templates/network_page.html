@@ -38,5 +38,32 @@
       <p id="network-msg" class="muted"></p>
     </form>
   </article>
+
+  <article class="card">
+    <h3>Interface State</h3>
+    <div class="kv"><span>Ethernet</span><strong id="eth-chip" class="status-chip">-</strong></div>
+    <div class="kv"><span>Wi-Fi</span><strong id="wifi-chip" class="status-chip">-</strong></div>
+    <div class="kv"><span>Bluetooth</span><strong id="bt-chip" class="status-chip">-</strong></div>
+    <div class="kv"><span>Hotspot</span><strong id="hotspot-chip" class="status-chip">-</strong></div>
+    <div class="row">
+      <input id="hotspot-ssid" placeholder="Hotspot SSID" readonly />
+      <input id="hotspot-password" placeholder="Hotspot Password" readonly />
+    </div>
+  </article>
+
+  <article class="card" style="grid-column: 1 / -1;">
+    <h3>Ethernet Ports</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Interface</th>
+          <th>State</th>
+          <th>MAC</th>
+          <th>MTU</th>
+        </tr>
+      </thead>
+      <tbody id="eth-scan-body"></tbody>
+    </table>
+  </article>
 </div>
 {% endblock %}

@@ -78,6 +78,68 @@ async def current_network_info() -> dict:
     }
 
 
+async def network_state() -> dict:
+    result = await _runner.run(['ip', '-j', 'link', 'show'])
+    links = json.loads(result.stdout) if result.exit_code == 0 and result.stdout else []
+
+    ethernet_ports = []
+    wifi_enabled = False
+    for link in links:
+        name = str(link.get('ifname') or '')
+        if not name or name == 'lo':
+            continue
+        state = str(link.get('operstate') or '').upper()
+        up = state == 'UP'
+        kind = str(link.get('link_type') or '').lower()
+        if name.startswith(('wl', 'wlan')) or kind == 'wifi':
+            wifi_enabled = wifi_enabled or up
+            continue
+        if name.startswith(('en', 'eth')) or kind == 'ether':
+            ethernet_ports.append(
+                {
+                    'name': name,
+                    'up': up,
+                    'state': state or 'UNKNOWN',
+                    'mac': str(link.get('address') or ''),
+                    'mtu': int(link.get('mtu') or 0),
+                }
+            )
+
+    result_bt = await _runner.run(['rfkill', 'list', 'bluetooth'])
+    bt_enabled = False
+    if result_bt.exit_code == 0 and result_bt.stdout:
+        text = result_bt.stdout.lower()
+        bt_enabled = 'soft blocked: no' in text and 'hard blocked: no' in text
+
+    result_hotspot = await _runner.run(['nmcli', '-t', '-f', 'NAME,TYPE,DEVICE', 'connection', 'show', '--active'])
+    hotspot_enabled = False
+    hotspot_ssid = ''
+    if result_hotspot.exit_code == 0 and result_hotspot.stdout:
+        for line in result_hotspot.stdout.splitlines():
+            parts = line.split(':')
+            if len(parts) < 3:
+                continue
+            name, conn_type, _device = parts[0], parts[1], parts[2]
+            if conn_type in {'wifi', '802-11-wireless'} and name.lower() in {'hotspot', 'ap', 'access point'}:
+                hotspot_enabled = True
+                hotspot_ssid = name
+                break
+
+    return {
+        'ethernet': {
+            'enabled': any(p['up'] for p in ethernet_ports),
+            'ports': ethernet_ports,
+        },
+        'wifi': {'enabled': wifi_enabled},
+        'bluetooth': {'enabled': bt_enabled},
+        'hotspot': {
+            'enabled': hotspot_enabled,
+            'ssid': hotspot_ssid,
+            'password': '',
+        },
+    }
+
+
 async def _active_connection_for_iface(interface: str) -> Optional[str]:
     result = await _runner.run(['nmcli', '-t', '-f', 'NAME,DEVICE', 'connection', 'show'])
     if result.exit_code != 0:

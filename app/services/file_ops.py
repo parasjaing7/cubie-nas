@@ -4,15 +4,20 @@ import os
 from pathlib import Path
 
 
+def validate_path(requested_path: str, device_mountpoint: str) -> Path:
+    base = Path(device_mountpoint).resolve(strict=False)
+    candidate = (base / requested_path.lstrip('/')).resolve(strict=False)
+    if base != candidate and base not in candidate.parents:
+        raise PermissionError('Path traversal detected')
+    return candidate
+
+
 class FileOps:
     def __init__(self, root: str):
         self.root = Path(root).resolve()
 
     def safe_path(self, rel: str) -> Path:
-        candidate = (self.root / rel.lstrip('/')).resolve()
-        if self.root not in [candidate, *candidate.parents]:
-            raise ValueError('Path escapes NAS root')
-        return candidate
+        return validate_path(rel, str(self.root))
 
     def list_dir(self, rel: str) -> list[dict]:
         target = self.safe_path(rel)

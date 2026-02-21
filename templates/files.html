@@ -1,0 +1,534 @@
+{% extends 'base.html' %}
+{% set page = 'files' %}
+
+{% block title %}File Manager{% endblock %}
+
+{% block content %}
+<section class="panel filemgr-shell">
+  <div id="fm-device-view">
+    <div class="panel-head">
+      <h3>Storage Devices</h3>
+      <button type="button" id="fm-refresh-devices">Refresh</button>
+    </div>
+    <div id="fm-device-grid" class="fm-device-grid"></div>
+  </div>
+
+  <div id="fm-browse-view" hidden>
+    <div class="panel-head">
+      <div class="row">
+        <button type="button" id="fm-back-devices" class="ghost-btn">← Devices</button>
+        <div id="fm-breadcrumb" class="fm-breadcrumb"></div>
+      </div>
+      <div class="row">
+        <button type="button" id="fm-grid-mode" class="ghost-btn">Grid</button>
+        <button type="button" id="fm-list-mode" class="ghost-btn">List</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <button type="button" id="fm-new-folder">New Folder</button>
+      <button type="button" id="fm-upload-trigger" class="ghost-btn">Upload</button>
+      <button type="button" id="fm-bulk-delete" class="danger-btn">Delete Selected</button>
+      <button type="button" id="fm-bulk-download" class="ghost-btn">Download Selected</button>
+      <input id="fm-upload-input" type="file" multiple hidden />
+    </div>
+
+    <div id="fm-dropzone" class="fm-dropzone">Drop files here or click Upload</div>
+
+    <div id="fm-grid" class="fm-grid"></div>
+    <div id="fm-list-wrap" class="table-scroll" hidden>
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Name</th>
+            <th>Size</th>
+            <th>Date Modified</th>
+            <th>Type</th>
+          </tr>
+        </thead>
+        <tbody id="fm-list-body"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<div id="fm-context" class="fm-context" hidden>
+  <button type="button" data-act="rename">Rename</button>
+  <button type="button" data-act="delete">Delete</button>
+  <button type="button" data-act="download">Download</button>
+  <button type="button" data-act="copy">Copy Path</button>
+</div>
+
+<script>
+(() => {
+  const state = {
+    device: null,
+    path: '',
+    items: [],
+    selected: new Set(),
+    mode: localStorage.getItem('fm-view') || 'grid',
+    contextPath: '',
+  };
+
+  const el = {
+    deviceView: document.getElementById('fm-device-view'),
+    browseView: document.getElementById('fm-browse-view'),
+    deviceGrid: document.getElementById('fm-device-grid'),
+    refreshDevices: document.getElementById('fm-refresh-devices'),
+    backDevices: document.getElementById('fm-back-devices'),
+    breadcrumb: document.getElementById('fm-breadcrumb'),
+    gridMode: document.getElementById('fm-grid-mode'),
+    listMode: document.getElementById('fm-list-mode'),
+    newFolder: document.getElementById('fm-new-folder'),
+    uploadTrigger: document.getElementById('fm-upload-trigger'),
+    uploadInput: document.getElementById('fm-upload-input'),
+    bulkDelete: document.getElementById('fm-bulk-delete'),
+    bulkDownload: document.getElementById('fm-bulk-download'),
+    dropzone: document.getElementById('fm-dropzone'),
+    grid: document.getElementById('fm-grid'),
+    listWrap: document.getElementById('fm-list-wrap'),
+    listBody: document.getElementById('fm-list-body'),
+    context: document.getElementById('fm-context'),
+  };
+
+  const icons = {
+    folder: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h6l2 2h10v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>',
+    image: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="M21 16l-5-5-6 6-3-3-4 4"/></svg>',
+    video: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>',
+    audio: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg>',
+    doc: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2h9l5 5v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M14 2v6h6"/></svg>',
+    archive: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="5"/><path d="M6 8h12v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V8z"/><path d="M10 12h4"/></svg>',
+    code: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 8l-4 4 4 4"/><path d="M16 8l4 4-4 4"/><path d="M14 4l-4 16"/></svg>',
+    file: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>',
+    sd: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/></svg>',
+    usb: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v14"/><path d="M8 6l4-4 4 4"/><circle cx="12" cy="19" r="3"/></svg>',
+    nvme: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="8" width="20" height="8" rx="2"/><circle cx="7" cy="12" r="1"/><circle cx="17" cy="12" r="1"/></svg>',
+  };
+
+  function rel(path) {
+    return String(path || '').replace(/^\/+/, '').replace(/\/{2,}/g, '/').replace(/\/$/, '');
+  }
+
+  function joinPath(base, name) {
+    const left = rel(base);
+    const right = rel(name);
+    if (!left) return right;
+    if (!right) return left;
+    return `${left}/${right}`;
+  }
+
+  function parentPath(path) {
+    const cur = rel(path);
+    if (!cur) return null;
+    const parts = cur.split('/').filter(Boolean);
+    if (parts.length <= 1) return '';
+    return parts.slice(0, -1).join('/');
+  }
+
+  function fileKind(item) {
+    if (item.is_dir) return {type: 'Directory', icon: icons.folder};
+    const n = String(item.name || '').toLowerCase();
+    if (n.match(/\.(jpg|jpeg|png|gif|webp|svg)$/)) return {type: 'Image', icon: icons.image};
+    if (n.match(/\.(mp4|mkv|avi|mov|webm)$/)) return {type: 'Video', icon: icons.video};
+    if (n.match(/\.(mp3|wav|flac|ogg|m4a)$/)) return {type: 'Audio', icon: icons.audio};
+    if (n.match(/\.(zip|rar|7z|tar|gz)$/)) return {type: 'Archive', icon: icons.archive};
+    if (n.match(/\.(js|ts|py|sh|json|yml|yaml|html|css)$/)) return {type: 'Code', icon: icons.code};
+    if (n.match(/\.(txt|md|pdf|doc|docx|xls|xlsx)$/)) return {type: 'Document', icon: icons.doc};
+    return {type: 'File', icon: icons.file};
+  }
+
+  function fmtBytes(v) {
+    const n = Number(v || 0);
+    if (!Number.isFinite(n) || n <= 0) return '-';
+    const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let i = 0;
+    let cur = n;
+    while (cur >= 1024 && i < u.length - 1) { cur /= 1024; i += 1; }
+    return `${cur.toFixed(cur >= 100 ? 0 : 1)} ${u[i]}`;
+  }
+
+  function fmtDate(unix) {
+    const v = Number(unix || 0);
+    return v > 0 ? new Date(v * 1000).toLocaleString() : '-';
+  }
+
+  function devIcon(type) {
+    if (type === 'usb') return icons.usb;
+    if (type === 'nvme') return icons.nvme;
+    return icons.sd;
+  }
+
+  function setViewMode(mode) {
+    state.mode = mode === 'list' ? 'list' : 'grid';
+    localStorage.setItem('fm-view', state.mode);
+    el.grid.hidden = state.mode !== 'grid';
+    el.listWrap.hidden = state.mode !== 'list';
+  }
+
+  function showDevices() {
+    state.device = null;
+    state.path = '';
+    state.selected.clear();
+    el.deviceView.hidden = false;
+    el.browseView.hidden = true;
+    hideContext();
+  }
+
+  function showBrowse(device) {
+    state.device = device;
+    state.path = rel(device.browse_path || '');
+    state.selected.clear();
+    el.deviceView.hidden = true;
+    el.browseView.hidden = false;
+    setViewMode(state.mode);
+    loadDir();
+  }
+
+  async function loadDevices() {
+    el.deviceGrid.innerHTML = '<div class="muted">Loading devices…</div>';
+    try {
+      const res = await window.api('/api/storage/devices');
+      const devices = Array.isArray(res.data) ? res.data : [];
+      if (!devices.length) {
+        el.deviceGrid.innerHTML = '<div class="muted">No storage devices detected</div>';
+        return;
+      }
+
+      el.deviceGrid.innerHTML = devices.map((d) => {
+        const used = Number(d.used_gb || 0);
+        const total = Number(d.total_gb || 0);
+        const pct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
+        const ready = typeof d.browse_path === 'string';
+        return `
+          <article class="fm-device-card ${ready ? '' : 'is-offline'}">
+            <div class="fm-device-head">
+              <span class="fm-icon">${devIcon(d.type)}</span>
+              <strong>${d.label || d.id || 'Device'}</strong>
+            </div>
+            <p class="muted">${d.mountpoint || 'Not connected'}</p>
+            <div class="progress"><span style="width:${pct}%"></span></div>
+            <p class="muted">${used.toFixed(1)} / ${total.toFixed(1)} GB</p>
+            <button type="button" class="fm-open-device" data-device='${JSON.stringify(d).replace(/'/g, '&#39;')}' ${ready ? '' : 'disabled'}>${ready ? 'Browse →' : 'Not connected'}</button>
+          </article>
+        `;
+      }).join('');
+    } catch (err) {
+      el.deviceGrid.innerHTML = `<div class="muted">Failed to load devices: ${err.message}</div>`;
+    }
+  }
+
+  function renderBreadcrumb() {
+    const parts = rel(state.path).split('/').filter(Boolean);
+    const crumbs = ['<a href="#" data-bc="">Root</a>'];
+    let acc = '';
+    parts.forEach((p) => {
+      acc = joinPath(acc, p);
+      crumbs.push(`<span>/</span><a href="#" data-bc="${acc}">${p}</a>`);
+    });
+    el.breadcrumb.innerHTML = crumbs.join(' ');
+  }
+
+  function sortedItems(items) {
+    return items.slice().sort((a, b) => {
+      if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
+  }
+
+  function itemPath(item) {
+    return rel(item.path || joinPath(state.path, item.name));
+  }
+
+  function renderGrid(items) {
+    const parent = parentPath(state.path);
+    const blocks = [];
+    if (parent !== null) {
+      blocks.push(`<article class="fm-item" data-open="${parent}"><div class="fm-item-icon">${icons.folder}</div><div><strong>..</strong><p class="muted">Back</p></div></article>`);
+    }
+    items.forEach((item) => {
+      const k = fileKind(item);
+      const p = itemPath(item);
+      blocks.push(`
+        <article class="fm-item ${state.selected.has(p) ? 'selected' : ''}" data-item="${p}">
+          <label class="fm-check"><input type="checkbox" data-select="${p}" ${state.selected.has(p) ? 'checked' : ''}></label>
+          <button type="button" class="fm-item-main" data-open="${item.is_dir ? p : ''}" data-download="${item.is_dir ? '' : p}">
+            <div class="fm-item-icon">${k.icon}</div>
+            <div>
+              <strong>${item.name}</strong>
+              <p class="muted">${item.is_dir ? 'Folder' : fmtBytes(item.size)}</p>
+            </div>
+          </button>
+        </article>
+      `);
+    });
+    el.grid.innerHTML = blocks.join('') || '<div class="muted">This folder is empty.</div>';
+  }
+
+  function renderList(items) {
+    const parent = parentPath(state.path);
+    const rows = [];
+    if (parent !== null) {
+      rows.push(`<tr><td></td><td><a href="#" data-open="${parent}">..</a></td><td>-</td><td>-</td><td>Parent</td></tr>`);
+    }
+    items.forEach((item) => {
+      const p = itemPath(item);
+      const k = fileKind(item);
+      rows.push(`
+        <tr data-item="${p}">
+          <td><input type="checkbox" data-select="${p}" ${state.selected.has(p) ? 'checked' : ''}></td>
+          <td>${k.icon} ${item.is_dir ? `<a href="#" data-open="${p}">${item.name}</a>` : item.name}</td>
+          <td>${item.is_dir ? '-' : fmtBytes(item.size)}</td>
+          <td>${fmtDate(item.mtime)}</td>
+          <td>${k.type}</td>
+        </tr>
+      `);
+    });
+    el.listBody.innerHTML = rows.join('') || '<tr><td colspan="5" class="muted">This folder is empty.</td></tr>';
+  }
+
+  async function loadDir() {
+    renderBreadcrumb();
+    hideContext();
+    try {
+      const res = await window.api(`/api/files/list?path=${encodeURIComponent(state.path)}&sort_by=name&order=asc`);
+      state.items = sortedItems(Array.isArray(res.data) ? res.data : []);
+      renderGrid(state.items);
+      renderList(state.items);
+    } catch (err) {
+      el.grid.innerHTML = `<div class="muted">Failed to load folder: ${err.message}</div>`;
+      el.listBody.innerHTML = `<tr><td colspan="5" class="muted">Failed to load folder: ${err.message}</td></tr>`;
+    }
+  }
+
+  async function createFolder() {
+    const name = prompt('New folder name');
+    if (!name) return;
+    await window.api('/api/files/mkdir', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({path: state.path, name}),
+    });
+    window.toast('Folder created', 'success');
+    await loadDir();
+  }
+
+  async function renamePath(path) {
+    const current = path.split('/').pop() || '';
+    const name = prompt('Rename to', current);
+    if (!name) return;
+    await window.api('/api/files/rename', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({path, new_name: name}),
+    });
+    window.toast('Renamed', 'success');
+    await loadDir();
+  }
+
+  async function deletePath(path) {
+    if (!confirm(`Delete ${path}?`)) return;
+    await window.api('/api/files/delete', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({path}),
+    });
+    window.toast('Deleted', 'success');
+    state.selected.delete(path);
+    await loadDir();
+  }
+
+  function downloadPath(path) {
+    window.open(`/api/files/download?path=${encodeURIComponent(path)}`, '_blank', 'noopener');
+  }
+
+  async function copyPath(path) {
+    await navigator.clipboard.writeText(path);
+    window.toast('Path copied', 'info');
+  }
+
+  async function uploadFiles(files) {
+    for (const file of files) {
+      const fd = new FormData();
+      fd.append('file', file);
+      await window.api(`/api/files/upload?path=${encodeURIComponent(state.path)}`, {method: 'POST', body: fd});
+    }
+    window.toast('Upload complete', 'success');
+    await loadDir();
+  }
+
+  async function bulkDelete() {
+    const targets = [...state.selected];
+    if (!targets.length) return;
+    if (!confirm(`Delete ${targets.length} selected item(s)?`)) return;
+    for (const path of targets) {
+      await window.api('/api/files/delete', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({path}),
+      });
+    }
+    state.selected.clear();
+    window.toast('Bulk delete complete', 'success');
+    await loadDir();
+  }
+
+  async function bulkDownload() {
+    const files = state.items.filter((i) => !i.is_dir && state.selected.has(itemPath(i)));
+    if (!files.length) {
+      window.toast('Select files to download', 'warning');
+      return;
+    }
+    const token = (document.cookie.match('(^|;)\\s*csrf_token=([^;]+)') || []).pop() || '';
+    const res = await fetch('/api/files/download-bulk', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': decodeURIComponent(token),
+      },
+      body: JSON.stringify({paths: files.map((f) => itemPath(f))}),
+    });
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({detail: 'Bulk download failed'}));
+      throw new Error(payload.detail || 'Bulk download failed');
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'files.zip';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    window.toast(`Downloaded ZIP for ${files.length} file(s)`, 'success');
+  }
+
+  function hideContext() {
+    el.context.hidden = true;
+    el.context.style.left = '-9999px';
+    el.context.style.top = '-9999px';
+  }
+
+  function showContext(x, y, path) {
+    state.contextPath = path;
+    el.context.hidden = false;
+    el.context.style.left = `${x}px`;
+    el.context.style.top = `${y}px`;
+  }
+
+  el.refreshDevices.addEventListener('click', loadDevices);
+  el.backDevices.addEventListener('click', showDevices);
+  el.gridMode.addEventListener('click', () => setViewMode('grid'));
+  el.listMode.addEventListener('click', () => setViewMode('list'));
+  el.newFolder.addEventListener('click', createFolder);
+  el.uploadTrigger.addEventListener('click', () => el.uploadInput.click());
+  el.uploadInput.addEventListener('change', async () => {
+    if (el.uploadInput.files && el.uploadInput.files.length) await uploadFiles(el.uploadInput.files);
+    el.uploadInput.value = '';
+  });
+  el.bulkDelete.addEventListener('click', bulkDelete);
+  el.bulkDownload.addEventListener('click', bulkDownload);
+
+  el.dropzone.addEventListener('dragover', (e) => { e.preventDefault(); el.dropzone.classList.add('drag'); });
+  el.dropzone.addEventListener('dragleave', () => el.dropzone.classList.remove('drag'));
+  el.dropzone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    el.dropzone.classList.remove('drag');
+    if (e.dataTransfer.files && e.dataTransfer.files.length) await uploadFiles(e.dataTransfer.files);
+  });
+
+  el.deviceGrid.addEventListener('click', (event) => {
+    const t = event.target;
+    if (!(t instanceof Element)) return;
+    const btn = t.closest('.fm-open-device');
+    if (!btn) return;
+    const raw = btn.getAttribute('data-device');
+    if (!raw) return;
+    const device = JSON.parse(raw.replace(/&#39;/g, "'"));
+    showBrowse(device);
+  });
+
+  el.breadcrumb.addEventListener('click', (event) => {
+    const t = event.target;
+    if (!(t instanceof Element)) return;
+    const bc = t.getAttribute('data-bc');
+    if (bc === null) return;
+    event.preventDefault();
+    state.path = rel(bc);
+    loadDir();
+  });
+
+  function resolveActionTarget(target) {
+    if (!(target instanceof Element)) return null;
+    const holder = target.closest('[data-item]');
+    return holder ? holder.getAttribute('data-item') : null;
+  }
+
+  document.addEventListener('click', async (event) => {
+    const t = event.target;
+    if (!(t instanceof Element)) return;
+
+    if (!el.context.hidden && !t.closest('#fm-context')) hideContext();
+
+    const open = t.getAttribute('data-open');
+    if (open !== null) {
+      event.preventDefault();
+      if (open) {
+        state.path = rel(open);
+        await loadDir();
+      }
+      return;
+    }
+
+    const dl = t.getAttribute('data-download');
+    if (dl !== null && dl) {
+      event.preventDefault();
+      downloadPath(dl);
+      return;
+    }
+
+    const selected = t.getAttribute('data-select');
+    if (selected !== null) {
+      if (t instanceof HTMLInputElement && t.checked) state.selected.add(selected);
+      else if (t instanceof HTMLInputElement) state.selected.delete(selected);
+      renderGrid(state.items);
+      renderList(state.items);
+      return;
+    }
+  });
+
+  document.addEventListener('contextmenu', (event) => {
+    const path = resolveActionTarget(event.target);
+    if (!path) return;
+    event.preventDefault();
+    showContext(event.clientX, event.clientY, path);
+  });
+
+  let longPressTimer = null;
+  document.addEventListener('touchstart', (event) => {
+    const path = resolveActionTarget(event.target);
+    if (!path) return;
+    longPressTimer = setTimeout(() => {
+      const touch = event.touches[0];
+      if (touch) showContext(touch.clientX, touch.clientY, path);
+    }, 500);
+  }, {passive: true});
+  document.addEventListener('touchend', () => { if (longPressTimer) clearTimeout(longPressTimer); });
+
+  el.context.addEventListener('click', async (event) => {
+    const t = event.target;
+    if (!(t instanceof Element)) return;
+    const act = t.getAttribute('data-act');
+    if (!act || !state.contextPath) return;
+
+    if (act === 'rename') await renamePath(state.contextPath);
+    if (act === 'delete') await deletePath(state.contextPath);
+    if (act === 'download') downloadPath(state.contextPath);
+    if (act === 'copy') await copyPath(state.contextPath);
+    hideContext();
+  });
+
+  setViewMode(state.mode);
+  loadDevices();
+})();
+</script>
+{% endblock %}

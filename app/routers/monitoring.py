@@ -7,14 +7,21 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from ..deps import get_current_user
 from ..security import decode_token
 from ..services.monitor import RateSampler, read_stats
+from ..services.syncthing import syncthing_status
 
 router = APIRouter(prefix='/api/monitor', tags=['monitor'])
+ws_router = APIRouter(tags=['monitor-ws'])
 
 
 @router.get('/snapshot')
 def snapshot(_=Depends(get_current_user)):
     sampler = RateSampler()
     return {'ok': True, 'data': read_stats(sampler)}
+
+
+@router.get('/syncthing/status')
+async def backup_status(_=Depends(get_current_user)):
+    return {'ok': True, 'data': await syncthing_status()}
 
 
 def _token_from_cookie_header(cookie_header: str | None) -> str | None:
@@ -27,8 +34,7 @@ def _token_from_cookie_header(cookie_header: str | None) -> str | None:
     return None
 
 
-@router.websocket('/ws')
-async def monitor_ws(ws: WebSocket):
+async def _monitor_ws_impl(ws: WebSocket):
     token = _token_from_cookie_header(ws.headers.get('cookie'))
     if not token:
         await ws.close(code=4401)
@@ -48,3 +54,13 @@ async def monitor_ws(ws: WebSocket):
             await asyncio.sleep(1)
     except WebSocketDisconnect:
         return
+
+
+@router.websocket('/ws')
+async def monitor_ws(ws: WebSocket):
+    await _monitor_ws_impl(ws)
+
+
+@ws_router.websocket('/ws/monitor')
+async def monitor_ws_alias(ws: WebSocket):
+    await _monitor_ws_impl(ws)

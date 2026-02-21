@@ -1,0 +1,226 @@
+{% extends 'base.html' %}
+{% set page = 'sharing' %}
+
+{% block title %}Sharing{% endblock %}
+
+{% block content %}
+<section class="panel sharing-shell">
+  <div class="panel-head">
+    <h3>SMB Shares</h3>
+    <div class="row">
+      <button type="button" id="sharing-open-add">Add Share</button>
+      <button type="button" id="sharing-refresh" class="ghost-btn">Refresh</button>
+    </div>
+  </div>
+  <div id="sharing-cards" class="sharing-cards"></div>
+</section>
+
+<aside id="sharing-drawer" class="sharing-drawer" hidden>
+  <div class="sharing-drawer-card">
+    <div class="panel-head">
+      <h3>Add Share</h3>
+      <button type="button" id="sharing-close-add" class="ghost-btn">Close</button>
+    </div>
+
+    <div class="row"><input id="sharing-name" placeholder="Share Name" /></div>
+
+    <div class="row">
+      <input id="sharing-folder" placeholder="/srv/nas/..." />
+      <button type="button" id="sharing-pick-folder" class="ghost-btn">Pick Folder</button>
+    </div>
+
+    <div class="row">
+      <label><input type="radio" name="share-access" value="everyone" checked /> Everyone on network</label>
+      <label><input type="radio" name="share-access" value="specific" /> Specific users</label>
+    </div>
+
+    <div id="sharing-users-wrap" hidden>
+      <label>Allowed Users</label>
+      <select id="sharing-users" multiple size="6"></select>
+    </div>
+
+    <div class="row">
+      <button type="button" id="sharing-submit">Create Share</button>
+    </div>
+  </div>
+</aside>
+
+<aside id="folder-picker" class="sharing-drawer" hidden>
+  <div class="sharing-drawer-card">
+    <div class="panel-head">
+      <h3>Folder Picker</h3>
+      <button type="button" id="folder-picker-close" class="ghost-btn">Close</button>
+    </div>
+    <div class="row">
+      <select id="folder-device"></select>
+      <input id="folder-subpath" placeholder="optional subfolder (e.g. photos/2026)" />
+    </div>
+    <div class="row">
+      <button type="button" id="folder-picker-use">Use Folder</button>
+    </div>
+  </div>
+</aside>
+
+<script>
+(() => {
+  const el = {
+    cards: document.getElementById('sharing-cards'),
+    refresh: document.getElementById('sharing-refresh'),
+    openAdd: document.getElementById('sharing-open-add'),
+    closeAdd: document.getElementById('sharing-close-add'),
+    drawer: document.getElementById('sharing-drawer'),
+    name: document.getElementById('sharing-name'),
+    folder: document.getElementById('sharing-folder'),
+    pickFolder: document.getElementById('sharing-pick-folder'),
+    usersWrap: document.getElementById('sharing-users-wrap'),
+    users: document.getElementById('sharing-users'),
+    submit: document.getElementById('sharing-submit'),
+    picker: document.getElementById('folder-picker'),
+    pickerClose: document.getElementById('folder-picker-close'),
+    pickerUse: document.getElementById('folder-picker-use'),
+    pickerDevice: document.getElementById('folder-device'),
+    pickerSubpath: document.getElementById('folder-subpath'),
+  };
+
+  let devices = [];
+
+  function selectedAccess() {
+    const picked = document.querySelector('input[name="share-access"]:checked');
+    return picked ? picked.value : 'everyone';
+  }
+
+  function toggleUserSelect() {
+    el.usersWrap.hidden = selectedAccess() !== 'specific';
+  }
+
+  function selectedUsers() {
+    return [...el.users.options].filter((opt) => opt.selected).map((opt) => opt.value);
+  }
+
+  function openDrawer() { el.drawer.hidden = false; }
+  function closeDrawer() { el.drawer.hidden = true; }
+  function openPicker() { el.picker.hidden = false; }
+  function closePicker() { el.picker.hidden = true; }
+
+  function card(item) {
+    const badgeClass = item.access === 'specific' ? 'status-chip status-offline' : 'status-chip status-online';
+    const badgeText = item.access === 'specific' ? 'Specific users' : 'Everyone';
+    return `
+      <article class="sharing-card">
+        <div class="panel-head">
+          <strong>${item.name}</strong>
+          <span class="${badgeClass}">${badgeText}</span>
+        </div>
+        <p class="muted">${item.path || '-'}</p>
+        <div class="kv"><span>Connections</span><strong>${Number(item.connections || 0)}</strong></div>
+        <div class="row">
+          <button type="button" class="danger-btn" data-remove="${item.name}">Remove</button>
+        </div>
+      </article>
+    `;
+  }
+
+  async function loadShares() {
+    el.cards.innerHTML = '<div class="muted">Loading shares…</div>';
+    try {
+      const res = await window.api('/api/sharing/list');
+      const rows = Array.isArray(res.data) ? res.data : [];
+      if (!rows.length) {
+        el.cards.innerHTML = '<div class="muted">No shares configured</div>';
+        return;
+      }
+      el.cards.innerHTML = rows.map(card).join('');
+    } catch (err) {
+      el.cards.innerHTML = `<div class="muted">Failed to load shares: ${err.message}</div>`;
+    }
+  }
+
+  async function loadUsers() {
+    try {
+      const users = await window.api('/api/users/app');
+      const rows = Array.isArray(users) ? users : [];
+      el.users.innerHTML = rows.map((u) => `<option value="${u.username}">${u.username}</option>`).join('');
+    } catch {
+      el.users.innerHTML = '';
+    }
+  }
+
+  async function loadDevices() {
+    try {
+      const res = await window.api('/api/storage/devices');
+      devices = Array.isArray(res.data) ? res.data : [];
+      const usable = devices.filter((d) => typeof d.browse_path === 'string');
+      el.pickerDevice.innerHTML = usable.map((d) => `<option value="${d.mountpoint}">${d.label || d.id} (${d.mountpoint})</option>`).join('');
+    } catch {
+      devices = [];
+      el.pickerDevice.innerHTML = '';
+    }
+  }
+
+  async function createShare() {
+    const name = (el.name.value || '').trim();
+    const folder = (el.folder.value || '').trim();
+    const access = selectedAccess();
+    const users = selectedUsers();
+
+    if (!name || !folder) {
+      window.toast('Share name and folder are required', 'error');
+      return;
+    }
+
+    await window.api('/api/sharing/add', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name, folder, access, users}),
+    });
+    window.toast('Share created', 'success');
+    closeDrawer();
+    await loadShares();
+  }
+
+  async function removeShare(name) {
+    if (!confirm(`Remove share ${name}?`)) return;
+    await window.api('/api/sharing/remove', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name}),
+    });
+    window.toast('Share removed', 'success');
+    await loadShares();
+  }
+
+  el.refresh.addEventListener('click', loadShares);
+  el.openAdd.addEventListener('click', () => { openDrawer(); loadUsers(); loadDevices(); });
+  el.closeAdd.addEventListener('click', closeDrawer);
+  el.pickFolder.addEventListener('click', () => { openPicker(); loadDevices(); });
+  el.pickerClose.addEventListener('click', closePicker);
+  el.submit.addEventListener('click', createShare);
+
+  document.querySelectorAll('input[name="share-access"]').forEach((radio) => {
+    radio.addEventListener('change', toggleUserSelect);
+  });
+  toggleUserSelect();
+
+  el.pickerUse.addEventListener('click', () => {
+    const mount = el.pickerDevice.value || '';
+    const sub = (el.pickerSubpath.value || '').replace(/^\/+/, '');
+    if (!mount) {
+      window.toast('Select a device', 'warning');
+      return;
+    }
+    el.folder.value = sub ? `${mount}/${sub}` : mount;
+    closePicker();
+  });
+
+  el.cards.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const name = target.getAttribute('data-remove');
+    if (!name) return;
+    removeShare(name);
+  });
+
+  loadShares();
+})();
+</script>
+{% endblock %}
