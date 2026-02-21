@@ -1,11 +1,17 @@
+const baseApi = typeof window !== 'undefined'
+  ? (typeof window.__baseApi === 'function'
+    ? window.__baseApi.bind(window)
+    : (typeof window.api === 'function' ? window.api.bind(window) : null))
+  : null;
+
 function cookie(name) {
   const m = document.cookie.match('(^|;)\\s*' + name + '=([^;]+)');
   return m ? m.pop() : '';
 }
 
 async function api(url, options = {}) {
-  if (typeof window.api === 'function') {
-    return window.api(url, options);
+  if (baseApi) {
+    return baseApi(url, options);
   }
   options.headers = options.headers || {};
   if (options.method && options.method !== 'GET') {
@@ -1007,7 +1013,9 @@ if (localStorage.getItem('theme-dark') === '1') {
 
 const page = document.body.getAttribute('data-page');
 if (page === 'overview') {
-  loadOverviewPage();
+  if (document.getElementById('ov-services-body')) {
+    loadOverviewPage();
+  }
 }
 if (page === 'general') {
   loadGeneralPage();
